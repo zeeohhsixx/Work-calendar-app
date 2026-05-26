@@ -1,15 +1,32 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { supabase } from "./supabase";
 
 export default function App() {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const hasKey = Boolean(import.meta.env.VITE_SUPABASE_ANON_KEY);
+  const [message, setMessage] = useState("Loading...");
+
+  useEffect(() => {
+    async function testConnection() {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+
+        if (error) {
+          setMessage("Supabase error: " + error.message);
+          return;
+        }
+
+        setMessage("Supabase connected successfully.");
+      } catch (err) {
+        setMessage("Crash: " + err.message);
+      }
+    }
+
+    testConnection();
+  }, []);
 
   return (
     <div style={{ padding: 40, fontFamily: "Arial" }}>
-      <h1>Debug Check</h1>
-      <p>React is working.</p>
-      <p>Supabase URL exists: {supabaseUrl ? "YES" : "NO"}</p>
-      <p>Supabase Key exists: {hasKey ? "YES" : "NO"}</p>
+      <h1>Work Calendar</h1>
+      <p>{message}</p>
     </div>
   );
 }
