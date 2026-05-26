@@ -74,12 +74,20 @@ export default function App() {
   async function setupEmployee() {
     const user = session.user;
 
-    await supabase.from("employees").upsert({
-      id: user.id,
-      full_name: user.email,
-      display_name: user.user_metadata?.display_name || user.email,
-      role: "employee"
-    });
+    const { data: existingEmployee } = await supabase
+      .from("employees")
+      .select("*")
+      .eq("id", user.id)
+      .single();
+
+    if (!existingEmployee) {
+      await supabase.from("employees").insert({
+        id: user.id,
+        full_name: user.email,
+        display_name: user.email,
+        role: "employee"
+      });
+    }
   }
 
   async function login() {
@@ -147,8 +155,8 @@ export default function App() {
       return;
     }
 
+    await loadEverything();
     alert("Display name updated.");
-    loadEverything();
   }
 
   function getEmployeeName(userId) {
@@ -207,7 +215,10 @@ export default function App() {
     let response;
 
     if (editingJob) {
-      response = await supabase.from("jobs").update(jobData).eq("id", editingJob.id);
+      response = await supabase
+        .from("jobs")
+        .update(jobData)
+        .eq("id", editingJob.id);
 
       await supabase.from("notifications").insert({
         job_id: editingJob.id,
@@ -215,7 +226,11 @@ export default function App() {
         message: `${form.job_name} was updated.`
       });
     } else {
-      response = await supabase.from("jobs").insert(jobData).select().single();
+      response = await supabase
+        .from("jobs")
+        .insert(jobData)
+        .select()
+        .single();
 
       if (!response.error) {
         await supabase.from("notifications").insert({
@@ -250,7 +265,10 @@ export default function App() {
   }
 
   async function updateStatus(jobId, status) {
-    const { error } = await supabase.from("jobs").update({ status }).eq("id", jobId);
+    const { error } = await supabase
+      .from("jobs")
+      .update({ status })
+      .eq("id", jobId);
 
     if (error) alert(error.message);
     else {
