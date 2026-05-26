@@ -9,6 +9,18 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
+const emptyForm = {
+  job_name: "",
+  job_location: "",
+  scheduled_date: "",
+  start_time: "",
+  estimated_hours: "",
+  customer_name: "",
+  customer_phone: "",
+  notes: "",
+  status: "scheduled"
+};
+
 export default function App() {
   const [session, setSession] = useState(null);
   const [jobs, setJobs] = useState([]);
@@ -18,18 +30,8 @@ export default function App() {
 
   const [showForm, setShowForm] = useState(false);
   const [selectedJob, setSelectedJob] = useState(null);
-
-  const [form, setForm] = useState({
-    job_name: "",
-    job_location: "",
-    scheduled_date: "",
-    start_time: "",
-    estimated_hours: "",
-    customer_name: "",
-    customer_phone: "",
-    notes: "",
-    status: "scheduled"
-  });
+  const [editingJob, setEditingJob] = useState(null);
+  const [form, setForm] = useState(emptyForm);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -74,10 +76,35 @@ export default function App() {
     setJobs(data || []);
   }
 
-  async function createJob(e) {
+  function openCreateForm() {
+    setEditingJob(null);
+    setForm(emptyForm);
+    setShowForm(true);
+  }
+
+  function openEditForm(job) {
+    setEditingJob(job);
+    setSelectedJob(null);
+
+    setForm({
+      job_name: job.job_name || "",
+      job_location: job.job_location || "",
+      scheduled_date: job.scheduled_date || "",
+      start_time: job.start_time || "",
+      estimated_hours: job.estimated_hours || "",
+      customer_name: job.customer_name || "",
+      customer_phone: job.customer_phone || "",
+      notes: job.notes || "",
+      status: job.status || "scheduled"
+    });
+
+    setShowForm(true);
+  }
+
+  async function saveJob(e) {
     e.preventDefault();
 
-    const { error } = await supabase.from("jobs").insert({
+    const jobData = {
       job_name: form.job_name,
       job_location: form.job_location,
       scheduled_date: form.scheduled_date,
@@ -87,26 +114,60 @@ export default function App() {
       customer_phone: form.customer_phone,
       notes: form.notes,
       status: form.status
-    });
+    };
+
+    let error;
+
+    if (editingJob) {
+      const response = await supabase
+        .from("jobs")
+        .update(jobData)
+        .eq("id", editingJob.id);
+
+      error = response.error;
+    } else {
+      const response = await supabase.from("jobs").insert(jobData);
+      error = response.error;
+    }
 
     if (error) {
       alert(error.message);
       return;
     }
 
-    setForm({
-      job_name: "",
-      job_location: "",
-      scheduled_date: "",
-      start_time: "",
-      estimated_hours: "",
-      customer_name: "",
-      customer_phone: "",
-      notes: "",
-      status: "scheduled"
-    });
-
+    setForm(emptyForm);
+    setEditingJob(null);
     setShowForm(false);
+    loadJobs();
+  }
+
+  async function deleteJob(jobId) {
+    const confirmed = window.confirm("Delete this job?");
+    if (!confirmed) return;
+
+    const { error } = await supabase.from("jobs").delete().eq("id", jobId);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setSelectedJob(null);
+    loadJobs();
+  }
+
+  async function markCompleted(jobId) {
+    const { error } = await supabase
+      .from("jobs")
+      .update({ status: "completed" })
+      .eq("id", jobId);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setSelectedJob(null);
     loadJobs();
   }
 
@@ -161,11 +222,23 @@ export default function App() {
 
           <h1>Employee Login</h1>
 
-          <input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <input placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <input
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+
+          <input
+            placeholder="Password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
 
           <button onClick={login}>Login</button>
-          <button className="secondary" onClick={signUp}>Create Account</button>
+          <button className="secondary" onClick={signUp}>
+            Create Account
+          </button>
         </div>
       </div>
     );
@@ -182,7 +255,9 @@ export default function App() {
           </div>
         </div>
 
-        <button className="logout" onClick={logout}>Logout</button>
+        <button className="logout" onClick={logout}>
+          Logout
+        </button>
       </header>
 
       <section className="calendar-card">
@@ -203,32 +278,93 @@ export default function App() {
         />
       </section>
 
-      <button className="floating-add" onClick={() => setShowForm(true)}>+</button>
+      <button className="floating-add" onClick={openCreateForm}>
+        +
+      </button>
 
       {showForm && (
         <div className="modal-bg">
-          <form className="modal" onSubmit={createJob}>
-            <h2>Add Job</h2>
+          <form className="modal" onSubmit={saveJob}>
+            <h2>{editingJob ? "Edit Job" : "Add Job"}</h2>
 
-            <input required placeholder="Job Name" value={form.job_name} onChange={(e) => setForm({ ...form, job_name: e.target.value })} />
-            <input required placeholder="Job Location" value={form.job_location} onChange={(e) => setForm({ ...form, job_location: e.target.value })} />
-            <input required type="date" value={form.scheduled_date} onChange={(e) => setForm({ ...form, scheduled_date: e.target.value })} />
-            <input type="time" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} />
-            <input type="number" placeholder="Estimated Hours" value={form.estimated_hours} onChange={(e) => setForm({ ...form, estimated_hours: e.target.value })} />
-            <input placeholder="Customer Name" value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} />
-            <input placeholder="Customer Phone" value={form.customer_phone} onChange={(e) => setForm({ ...form, customer_phone: e.target.value })} />
+            <input
+              required
+              placeholder="Job Name"
+              value={form.job_name}
+              onChange={(e) => setForm({ ...form, job_name: e.target.value })}
+            />
 
-            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+            <input
+              required
+              placeholder="Job Location"
+              value={form.job_location}
+              onChange={(e) => setForm({ ...form, job_location: e.target.value })}
+            />
+
+            <input
+              required
+              type="date"
+              value={form.scheduled_date}
+              onChange={(e) => setForm({ ...form, scheduled_date: e.target.value })}
+            />
+
+            <input
+              type="time"
+              value={form.start_time}
+              onChange={(e) => setForm({ ...form, start_time: e.target.value })}
+            />
+
+            <input
+              type="number"
+              placeholder="Estimated Hours"
+              value={form.estimated_hours}
+              onChange={(e) => setForm({ ...form, estimated_hours: e.target.value })}
+            />
+
+            <input
+              placeholder="Customer Name"
+              value={form.customer_name}
+              onChange={(e) => setForm({ ...form, customer_name: e.target.value })}
+            />
+
+            <input
+              placeholder="Customer Phone"
+              value={form.customer_phone}
+              onChange={(e) => setForm({ ...form, customer_phone: e.target.value })}
+            />
+
+            <select
+              value={form.status}
+              onChange={(e) => setForm({ ...form, status: e.target.value })}
+            >
               <option value="scheduled">Scheduled</option>
               <option value="in_progress">In Progress</option>
               <option value="urgent">Urgent</option>
+              <option value="rescheduled">Rescheduled</option>
               <option value="completed">Completed</option>
             </select>
 
-            <textarea placeholder="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+            <textarea
+              placeholder="Notes"
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            />
 
-            <button type="submit">Save Job</button>
-            <button type="button" className="secondary" onClick={() => setShowForm(false)}>Cancel</button>
+            <button type="submit">
+              {editingJob ? "Update Job" : "Save Job"}
+            </button>
+
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => {
+                setShowForm(false);
+                setEditingJob(null);
+                setForm(emptyForm);
+              }}
+            >
+              Cancel
+            </button>
           </form>
         </div>
       )}
@@ -237,15 +373,60 @@ export default function App() {
         <div className="modal-bg">
           <div className="modal">
             <h2>{selectedJob.job_name}</h2>
-            <p><strong>Location:</strong> {selectedJob.job_location}</p>
-            <p><strong>Date:</strong> {selectedJob.scheduled_date}</p>
-            <p><strong>Time:</strong> {selectedJob.start_time || "Not set"}</p>
-            <p><strong>Customer:</strong> {selectedJob.customer_name || "Not set"}</p>
-            <p><strong>Phone:</strong> {selectedJob.customer_phone || "Not set"}</p>
-            <p><strong>Status:</strong> {selectedJob.status}</p>
+
+            <p>
+              <strong>Location:</strong> {selectedJob.job_location}
+            </p>
+
+            <p>
+              <strong>Date:</strong> {selectedJob.scheduled_date}
+            </p>
+
+            <p>
+              <strong>Time:</strong> {selectedJob.start_time || "Not set"}
+            </p>
+
+            <p>
+              <strong>Estimated Hours:</strong>{" "}
+              {selectedJob.estimated_hours || "Not set"}
+            </p>
+
+            <p>
+              <strong>Customer:</strong>{" "}
+              {selectedJob.customer_name || "Not set"}
+            </p>
+
+            <p>
+              <strong>Phone:</strong> {selectedJob.customer_phone || "Not set"}
+            </p>
+
+            <p>
+              <strong>Status:</strong> {selectedJob.status}
+            </p>
+
             <p>{selectedJob.notes}</p>
 
-            <button onClick={() => setSelectedJob(null)}>Close</button>
+            <button onClick={() => openEditForm(selectedJob)}>
+              Edit Job
+            </button>
+
+            <button
+              className="secondary"
+              onClick={() => markCompleted(selectedJob.id)}
+            >
+              Mark Completed
+            </button>
+
+            <button
+              className="danger"
+              onClick={() => deleteJob(selectedJob.id)}
+            >
+              Delete Job
+            </button>
+
+            <button className="secondary" onClick={() => setSelectedJob(null)}>
+              Close
+            </button>
           </div>
         </div>
       )}
