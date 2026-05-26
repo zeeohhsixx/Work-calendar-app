@@ -42,6 +42,7 @@ export default function App() {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [displayName, setDisplayName] = useState("");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -64,6 +65,7 @@ export default function App() {
       .on("postgres_changes", { event: "*", schema: "public", table: "jobs" }, loadEverything)
       .on("postgres_changes", { event: "*", schema: "public", table: "job_files" }, loadEverything)
       .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, loadEverything)
+      .on("postgres_changes", { event: "*", schema: "public", table: "employees" }, loadEverything)
       .subscribe();
 
     return () => supabase.removeChannel(channel);
@@ -112,9 +114,41 @@ export default function App() {
     ]);
 
     if (!jobRes.error) setJobs(jobRes.data || []);
-    if (!employeeRes.error) setEmployees(employeeRes.data || []);
+
+    if (!employeeRes.error) {
+      setEmployees(employeeRes.data || []);
+
+      const currentEmployee = employeeRes.data?.find(
+        (e) => e.id === session.user.id
+      );
+
+      setDisplayName(currentEmployee?.display_name || "");
+    }
+
     if (!fileRes.error) setFiles(fileRes.data || []);
     if (!notificationRes.error) setNotifications(notificationRes.data || []);
+  }
+
+  async function updateDisplayName() {
+    if (!displayName.trim()) {
+      alert("Please enter a display name.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("employees")
+      .update({
+        display_name: displayName.trim()
+      })
+      .eq("id", session.user.id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    alert("Display name updated.");
+    loadEverything();
   }
 
   function getEmployeeName(userId) {
@@ -463,6 +497,24 @@ export default function App() {
         </section>
       )}
 
+      {activeTab === "profile" && (
+        <section className="panel">
+          <h2>Profile</h2>
+
+          <p>Change how your name appears when jobs are assigned.</p>
+
+          <input
+            placeholder="Display Name"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+          />
+
+          <button onClick={updateDisplayName}>
+            Save Display Name
+          </button>
+        </section>
+      )}
+
       <button className="floating-add" onClick={openCreateForm}>
         +
       </button>
@@ -663,10 +715,10 @@ export default function App() {
         </button>
 
         <button
-          className={activeTab === "notifications" ? "nav-active" : ""}
-          onClick={() => setActiveTab("notifications")}
+          className={activeTab === "profile" ? "nav-active" : ""}
+          onClick={() => setActiveTab("profile")}
         >
-          <span>Alerts</span>
+          <span>Profile</span>
         </button>
       </nav>
     </div>
