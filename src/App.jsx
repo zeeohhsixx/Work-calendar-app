@@ -7,13 +7,62 @@ const supabase = createClient(
 );
 
 export default function App() {
+  const [session, setSession] = useState(null);
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
   const [jobs, setJobs] = useState([]);
   const [jobName, setJobName] = useState("");
   const [jobLocation, setJobLocation] = useState("");
 
   useEffect(() => {
-    loadJobs();
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+    });
+
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (session) {
+      loadJobs();
+    }
+  }, [session]);
+
+  async function signUp() {
+    const { error } = await supabase.auth.signUp({
+      email,
+      password
+    });
+
+    if (error) {
+      alert(error.message);
+    } else {
+      alert("Account created.");
+    }
+  }
+
+  async function login() {
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (error) {
+      alert(error.message);
+    }
+  }
+
+  async function logout() {
+    await supabase.auth.signOut();
+  }
 
   async function loadJobs() {
     const { data, error } = await supabase
@@ -44,9 +93,48 @@ export default function App() {
     }
   }
 
+  if (!session) {
+    return (
+      <div style={styles.page}>
+        <div style={styles.card}>
+          <h1>Employee Login</h1>
+
+          <input
+            style={styles.input}
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+
+          <input
+            style={styles.input}
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+
+          <button style={styles.button} onClick={login}>
+            Login
+          </button>
+
+          <button style={styles.secondaryButton} onClick={signUp}>
+            Create Account
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={styles.page}>
-      <h1>Shared Work Calendar</h1>
+      <div style={styles.topbar}>
+        <h1>Shared Work Calendar</h1>
+
+        <button style={styles.secondaryButton} onClick={logout}>
+          Logout
+        </button>
+      </div>
 
       <div style={styles.card}>
         <form onSubmit={createJob}>
@@ -91,6 +179,12 @@ const styles = {
     background: "#f3f4f6",
     minHeight: "100vh"
   },
+  topbar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20
+  },
   card: {
     background: "white",
     padding: 20,
@@ -106,6 +200,13 @@ const styles = {
     padding: 12,
     width: "100%",
     background: "black",
+    color: "white",
+    border: "none",
+    marginBottom: 10
+  },
+  secondaryButton: {
+    padding: 12,
+    background: "#444",
     color: "white",
     border: "none"
   },
