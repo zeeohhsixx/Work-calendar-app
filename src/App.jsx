@@ -39,6 +39,7 @@ export default function App() {
   const [selectedJob, setSelectedJob] = useState(null);
   const [editingJob, setEditingJob] = useState(null);
   const [form, setForm] = useState(emptyForm);
+
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
@@ -60,9 +61,21 @@ export default function App() {
 
     const channel = supabase
       .channel("live-jobs")
-      .on("postgres_changes", { event: "*", schema: "public", table: "jobs" }, loadEverything)
-      .on("postgres_changes", { event: "*", schema: "public", table: "job_files" }, loadEverything)
-      .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, loadEverything)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "jobs" },
+        loadEverything
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "job_files" },
+        loadEverything
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "notifications" },
+        loadEverything
+      )
       .subscribe();
 
     return () => supabase.removeChannel(channel);
@@ -79,12 +92,20 @@ export default function App() {
   }
 
   async function login() {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+
     if (error) alert(error.message);
   }
 
   async function signUp() {
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { error } = await supabase.auth.signUp({
+      email,
+      password
+    });
+
     if (error) alert(error.message);
     else alert("Account created.");
   }
@@ -116,6 +137,7 @@ export default function App() {
   function openEditForm(job) {
     setEditingJob(job);
     setSelectedJob(null);
+
     setForm({
       job_name: job.job_name || "",
       job_location: job.job_location || "",
@@ -129,6 +151,7 @@ export default function App() {
       priority: job.priority || "normal",
       assigned_to: job.assigned_to || ""
     });
+
     setShowForm(true);
   }
 
@@ -239,7 +262,6 @@ export default function App() {
     if (!file) return;
 
     const path = `${jobId}/${Date.now()}-${file.name}`;
-
     const upload = await supabase.storage.from("job-files").upload(path, file);
 
     if (upload.error) {
@@ -299,7 +321,9 @@ export default function App() {
     .map((job) => ({
       id: String(job.id),
       title: job.job_name,
-      start: job.start_time ? `${job.scheduled_date}T${job.start_time}` : job.scheduled_date,
+      start: job.start_time
+        ? `${job.scheduled_date}T${job.start_time}`
+        : job.scheduled_date,
       backgroundColor: eventColor(job),
       borderColor: eventColor(job),
       textColor: "#ffffff",
@@ -320,11 +344,23 @@ export default function App() {
 
           <h1>Employee Login</h1>
 
-          <input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <input placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <input
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+
+          <input
+            placeholder="Password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
 
           <button onClick={login}>Login</button>
-          <button className="secondary" onClick={signUp}>Create Account</button>
+          <button className="secondary" onClick={signUp}>
+            Create Account
+          </button>
         </div>
       </div>
     );
@@ -341,11 +377,17 @@ export default function App() {
           </div>
         </div>
 
-        <button className="logout" onClick={logout}>Logout</button>
+        <button className="logout" onClick={logout}>
+          Logout
+        </button>
       </header>
 
       <div className="filters">
-        <input placeholder="Search jobs, customers, locations..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        <input
+          placeholder="Search jobs, customers, locations..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
 
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="all">All Jobs</option>
@@ -379,6 +421,7 @@ export default function App() {
       {activeTab === "list" && (
         <section className="panel">
           <h2>Job List</h2>
+
           {filteredJobs.map((job) => (
             <div className="job-card" key={job.id} onClick={() => setSelectedJob(job)}>
               <strong>{job.job_name}</strong>
@@ -392,7 +435,9 @@ export default function App() {
       {activeTab === "today" && (
         <section className="panel">
           <h2>Today’s Agenda</h2>
+
           {todayJobs.length === 0 && <p>No jobs scheduled today.</p>}
+
           {todayJobs.map((job) => (
             <div className="job-card" key={job.id} onClick={() => setSelectedJob(job)}>
               <strong>{job.job_name}</strong>
@@ -406,6 +451,7 @@ export default function App() {
       {activeTab === "notifications" && (
         <section className="panel">
           <h2>Notifications</h2>
+
           {notifications.map((n) => (
             <div className="job-card" key={n.id}>
               <strong>{n.message}</strong>
@@ -415,44 +461,108 @@ export default function App() {
         </section>
       )}
 
-      <button className="floating-add" onClick={openCreateForm}>+</button>
+      <button className="floating-add" onClick={openCreateForm}>
+        +
+      </button>
 
       {showForm && (
         <div className="modal-bg">
           <form className="modal" onSubmit={saveJob}>
             <h2>{editingJob ? "Edit Job" : "Add Job"}</h2>
 
-            <input required placeholder="Job Name" value={form.job_name} onChange={(e) => setForm({ ...form, job_name: e.target.value })} />
-            <input required placeholder="Job Location" value={form.job_location} onChange={(e) => setForm({ ...form, job_location: e.target.value })} />
-            <input required type="date" value={form.scheduled_date} onChange={(e) => setForm({ ...form, scheduled_date: e.target.value })} />
-            <input type="time" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} />
-            <input type="number" placeholder="Estimated Hours" value={form.estimated_hours} onChange={(e) => setForm({ ...form, estimated_hours: e.target.value })} />
-            <input placeholder="Customer Name" value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} />
-            <input placeholder="Customer Phone" value={form.customer_phone} onChange={(e) => setForm({ ...form, customer_phone: e.target.value })} />
+            <input
+              required
+              placeholder="Job Name"
+              value={form.job_name}
+              onChange={(e) => setForm({ ...form, job_name: e.target.value })}
+            />
 
-            <select value={form.assigned_to} onChange={(e) => setForm({ ...form, assigned_to: e.target.value })}>
+            <input
+              required
+              placeholder="Job Location"
+              value={form.job_location}
+              onChange={(e) => setForm({ ...form, job_location: e.target.value })}
+            />
+
+            <input
+              required
+              type="date"
+              value={form.scheduled_date}
+              onChange={(e) => setForm({ ...form, scheduled_date: e.target.value })}
+            />
+
+            <input
+              type="time"
+              value={form.start_time}
+              onChange={(e) => setForm({ ...form, start_time: e.target.value })}
+            />
+
+            <input
+              type="number"
+              placeholder="Estimated Hours"
+              value={form.estimated_hours}
+              onChange={(e) => setForm({ ...form, estimated_hours: e.target.value })}
+            />
+
+            <input
+              placeholder="Customer Name"
+              value={form.customer_name}
+              onChange={(e) => setForm({ ...form, customer_name: e.target.value })}
+            />
+
+            <input
+              placeholder="Customer Phone"
+              value={form.customer_phone}
+              onChange={(e) => setForm({ ...form, customer_phone: e.target.value })}
+            />
+
+            <select
+              value={form.assigned_to}
+              onChange={(e) => setForm({ ...form, assigned_to: e.target.value })}
+            >
               <option value="">Unassigned</option>
               {employees.map((employee) => (
-                <option key={employee.id} value={employee.id}>{employee.full_name}</option>
+                <option key={employee.id} value={employee.id}>
+                  {employee.full_name}
+                </option>
               ))}
             </select>
 
-            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+            <select
+              value={form.status}
+              onChange={(e) => setForm({ ...form, status: e.target.value })}
+            >
               <option value="scheduled">Scheduled</option>
               <option value="in_progress">In Progress</option>
               <option value="rescheduled">Rescheduled</option>
               <option value="completed">Completed</option>
             </select>
 
-            <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
+            <select
+              value={form.priority}
+              onChange={(e) => setForm({ ...form, priority: e.target.value })}
+            >
               <option value="normal">Normal Priority</option>
               <option value="urgent">Urgent</option>
             </select>
 
-            <textarea placeholder="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+            <textarea
+              placeholder="Notes"
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            />
 
-            <button type="submit">{editingJob ? "Update Job" : "Save Job"}</button>
-            <button type="button" className="secondary" onClick={() => setShowForm(false)}>Cancel</button>
+            <button type="submit">
+              {editingJob ? "Update Job" : "Save Job"}
+            </button>
+
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => setShowForm(false)}
+            >
+              Cancel
+            </button>
           </form>
         </div>
       )}
@@ -472,36 +582,88 @@ export default function App() {
             <p>{selectedJob.notes}</p>
 
             <div className="map-grid">
-              <a href={appleMaps(selectedJob.job_location)} target="_blank">Apple Maps</a>
-              <a href={wazeMaps(selectedJob.job_location)} target="_blank">Waze</a>
+              <a href={appleMaps(selectedJob.job_location)} target="_blank">
+                Apple Maps
+              </a>
+
+              <a href={wazeMaps(selectedJob.job_location)} target="_blank">
+                Waze
+              </a>
             </div>
 
             <label className="upload-box">
               Upload Picture / Document
-              <input type="file" onChange={(e) => uploadFile(selectedJob.id, e.target.files[0])} />
+              <input
+                type="file"
+                onChange={(e) => uploadFile(selectedJob.id, e.target.files[0])}
+              />
             </label>
 
             <h3>Files</h3>
+
             {selectedFiles.map((file) => (
               <a className="file-link" key={file.id} href={file.file_url} target="_blank">
                 {file.file_name}
               </a>
             ))}
 
-            <button onClick={() => openEditForm(selectedJob)}>Edit Job</button>
-            <button className="secondary" onClick={() => updateStatus(selectedJob.id, "in_progress")}>Mark In Progress</button>
-            <button className="secondary" onClick={() => updateStatus(selectedJob.id, "completed")}>Mark Completed</button>
-            <button className="danger" onClick={() => deleteJob(selectedJob.id)}>Delete Job</button>
-            <button className="secondary" onClick={() => setSelectedJob(null)}>Close</button>
+            <button onClick={() => openEditForm(selectedJob)}>
+              Edit Job
+            </button>
+
+            <button
+              className="secondary"
+              onClick={() => updateStatus(selectedJob.id, "in_progress")}
+            >
+              Mark In Progress
+            </button>
+
+            <button
+              className="secondary"
+              onClick={() => updateStatus(selectedJob.id, "completed")}
+            >
+              Mark Completed
+            </button>
+
+            <button className="danger" onClick={() => deleteJob(selectedJob.id)}>
+              Delete Job
+            </button>
+
+            <button className="secondary" onClick={() => setSelectedJob(null)}>
+              Close
+            </button>
           </div>
         </div>
       )}
 
       <nav>
-        <button onClick={() => setActiveTab("calendar")}>📅</button>
-        <button onClick={() => setActiveTab("list")}>📋</button>
-        <button onClick={() => setActiveTab("today")}>🗓️</button>
-        <button onClick={() => setActiveTab("notifications")}>🔔</button>
+        <button
+          className={activeTab === "calendar" ? "nav-active" : ""}
+          onClick={() => setActiveTab("calendar")}
+        >
+          <span>Calendar</span>
+        </button>
+
+        <button
+          className={activeTab === "list" ? "nav-active" : ""}
+          onClick={() => setActiveTab("list")}
+        >
+          <span>Jobs</span>
+        </button>
+
+        <button
+          className={activeTab === "today" ? "nav-active" : ""}
+          onClick={() => setActiveTab("today")}
+        >
+          <span>Today</span>
+        </button>
+
+        <button
+          className={activeTab === "notifications" ? "nav-active" : ""}
+          onClick={() => setActiveTab("notifications")}
+        >
+          <span>Alerts</span>
+        </button>
       </nav>
     </div>
   );
