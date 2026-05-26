@@ -232,5 +232,8 @@ nav {
   .fc .fc-toolbar {
     flex-direction: column;
     gap: 10px;
-  }
+  }button.danger {
+  background: #dc2626;
+  margin-top: 10px;
+}  
 }
