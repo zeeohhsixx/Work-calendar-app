@@ -118,10 +118,11 @@ export default function App() {
     }
   }
 
-  const events = jobs.map((job) => ({
-    id: job.id,
-    title: job.job_name,
-    date: job.scheduled_date
+const events = jobs.map((job) => ({
+  id: job.id,
+  title: job.job_name,
+  date: job.scheduled_date
+
   }));
 
   if (!session) {
