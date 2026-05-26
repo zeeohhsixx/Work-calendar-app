@@ -1,24 +1,15 @@
-import React, { useEffect, useState } from "react";
-import { supabase } from "./supabase";
+import React from "react";
 
 export default function App() {
-  const [session, setSession] = useState(null);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-    });
-  }, []);
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const hasKey = Boolean(import.meta.env.VITE_SUPABASE_ANON_KEY);
 
   return (
     <div style={{ padding: 40, fontFamily: "Arial" }}>
-      <h1>Shared Work Calendar</h1>
-
-      {session ? (
-        <p>You are logged in.</p>
-      ) : (
-        <p>Supabase connected. Login screen coming next.</p>
-      )}
+      <h1>Debug Check</h1>
+      <p>React is working.</p>
+      <p>Supabase URL exists: {supabaseUrl ? "YES" : "NO"}</p>
+      <p>Supabase Key exists: {hasKey ? "YES" : "NO"}</p>
     </div>
   );
 }
