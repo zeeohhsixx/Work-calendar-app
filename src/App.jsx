@@ -108,7 +108,7 @@ export default function App() {
         scheduled_date: newDate,
         status: "rescheduled"
       })
-      .eq("id", info.event.id);
+      .eq("id", number(info.event.id));
 
     if (error) {
       alert(error.message);
