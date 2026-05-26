@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
-
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
@@ -12,53 +11,49 @@ const supabase = createClient(
 
 export default function App() {
   const [session, setSession] = useState(null);
+  const [jobs, setJobs] = useState([]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const [jobs, setJobs] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [selectedJob, setSelectedJob] = useState(null);
 
-  const [jobName, setJobName] = useState("");
-  const [jobLocation, setJobLocation] = useState("");
-  const [jobDate, setJobDate] = useState("");
+  const [form, setForm] = useState({
+    job_name: "",
+    job_location: "",
+    scheduled_date: "",
+    start_time: "",
+    estimated_hours: "",
+    customer_name: "",
+    customer_phone: "",
+    notes: "",
+    status: "scheduled"
+  });
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-    });
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
 
-    const {
-      data: { subscription }
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
     });
 
-    return () => subscription.unsubscribe();
+    return () => data.subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
-    if (session) {
-      loadJobs();
-    }
+    if (session) loadJobs();
   }, [session]);
 
-  async function signUp() {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password
-    });
-
+  async function login() {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) alert(error.message);
-    else alert("Account created.");
   }
 
-  async function login() {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
-
+  async function signUp() {
+    const { error } = await supabase.auth.signUp({ email, password });
     if (error) alert(error.message);
+    else alert("Account created.");
   }
 
   async function logout() {
@@ -71,245 +66,196 @@ export default function App() {
       .select("*")
       .order("scheduled_date", { ascending: true });
 
-    if (!error) {
-      setJobs(data || []);
+    if (error) {
+      alert(error.message);
+      return;
     }
+
+    setJobs(data || []);
   }
 
-  async function createJob() {
-    if (!jobName || !jobDate) return;
+  async function createJob(e) {
+    e.preventDefault();
 
     const { error } = await supabase.from("jobs").insert({
-      job_name: jobName,
-      job_location: jobLocation,
-      scheduled_date: jobDate,
+      job_name: form.job_name,
+      job_location: form.job_location,
+      scheduled_date: form.scheduled_date,
+      start_time: form.start_time || null,
+      estimated_hours: Number(form.estimated_hours || 1),
+      customer_name: form.customer_name,
+      customer_phone: form.customer_phone,
+      notes: form.notes,
+      status: form.status
+    });
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setForm({
+      job_name: "",
+      job_location: "",
+      scheduled_date: "",
+      start_time: "",
+      estimated_hours: "",
+      customer_name: "",
+      customer_phone: "",
+      notes: "",
       status: "scheduled"
     });
 
-    if (!error) {
-      setJobName("");
-      setJobLocation("");
-      setJobDate("");
+    setShowForm(false);
+    loadJobs();
+  }
 
+  async function rescheduleJob(info) {
+    const newDate = info.event.startStr.split("T")[0];
+
+    const { error } = await supabase
+      .from("jobs")
+      .update({
+        scheduled_date: newDate,
+        status: "rescheduled"
+      })
+      .eq("id", Number(info.event.id));
+
+    if (error) {
+      alert(error.message);
+      info.revert();
+    } else {
       loadJobs();
     }
   }
 
-  async function handleEventDrop(info) {
-    const newDate = info.event.startStr.split("T")[0];
-
-    await supabase
-      .from("jobs")
-      .update({
-        scheduled_date: newDate
-      })
-      .eq("id", Number(info.event.id));
-
-    loadJobs();
+  function eventColor(status) {
+    if (status === "completed") return "#6b7280";
+    if (status === "in_progress") return "#2563eb";
+    if (status === "urgent") return "#dc2626";
+    if (status === "rescheduled") return "#7c3aed";
+    return "#0ea5e9";
   }
 
-  const events = jobs.map((job) => ({
-    id: String(job.id),
-    title: job.job_name,
-    start: job.scheduled_date,
-    backgroundColor: "#22c55e",
-    borderColor: "#22c55e",
-    textColor: "#fff"
-  }));
+  const events = jobs
+    .filter((job) => job.scheduled_date)
+    .map((job) => ({
+      id: String(job.id),
+      title: job.job_name,
+      start: job.start_time
+        ? `${job.scheduled_date}T${job.start_time}`
+        : job.scheduled_date,
+      backgroundColor: eventColor(job.status),
+      borderColor: eventColor(job.status),
+      textColor: "#ffffff",
+      extendedProps: job
+    }));
 
   if (!session) {
     return (
-      <div style={styles.loginPage}>
-        <div style={styles.loginCard}>
-          <h1 style={{ marginBottom: 20 }}>Employee Login</h1>
+      <div className="login-page">
+        <div className="login-card">
+          <div className="logo-box">
+            <img src="/logo.jpeg" className="logo" />
+          </div>
 
-          <input
-            style={styles.input}
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
+          <h1>Employee Login</h1>
 
-          <input
-            style={styles.input}
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
+          <input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <input placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
 
-          <button style={styles.primaryButton} onClick={login}>
-            Login
-          </button>
-
-          <button style={styles.secondaryButton} onClick={signUp}>
-            Create Account
-          </button>
+          <button onClick={login}>Login</button>
+          <button className="secondary" onClick={signUp}>Create Account</button>
         </div>
       </div>
     );
   }
 
   return (
-    <div style={styles.app}>
-      <div style={styles.header}>
-        <h1 style={{ margin: 0 }}>Work Calendar</h1>
+    <div className="app">
+      <header>
+        <div className="brand">
+          <img src="/logo.jpeg" className="header-logo" />
+          <div>
+            <h1>Scheduler</h1>
+            <p>Custom Blinds, Shades, & Shutters</p>
+          </div>
+        </div>
 
-        <button style={styles.logoutButton} onClick={logout}>
-          Logout
-        </button>
-      </div>
+        <button className="logout" onClick={logout}>Logout</button>
+      </header>
 
-      <div style={styles.formCard}>
-        <input
-          style={styles.input}
-          placeholder="Job Name"
-          value={jobName}
-          onChange={(e) => setJobName(e.target.value)}
-        />
-
-        <input
-          style={styles.input}
-          placeholder="Job Location"
-          value={jobLocation}
-          onChange={(e) => setJobLocation(e.target.value)}
-        />
-
-        <input
-          style={styles.input}
-          type="date"
-          value={jobDate}
-          onChange={(e) => setJobDate(e.target.value)}
-        />
-
-        <button style={styles.primaryButton} onClick={createJob}>
-          Add Job
-        </button>
-      </div>
-
-      <div style={styles.calendarWrapper}>
+      <section className="calendar-card">
         <FullCalendar
           plugins={[dayGridPlugin, interactionPlugin]}
           initialView="dayGridMonth"
           editable={true}
-          eventDrop={handleEventDrop}
+          eventDrop={rescheduleJob}
+          eventClick={(info) => setSelectedJob(info.event.extendedProps)}
           events={events}
           height="auto"
+          dayMaxEvents={4}
           headerToolbar={{
             left: "prev,next",
             center: "title",
-            right: ""
+            right: "today"
           }}
         />
-      </div>
+      </section>
 
-      <div style={styles.bottomNav}>
-        <div>📅</div>
-        <div>📋</div>
-        <div>🔔</div>
-        <div>⚙️</div>
-      </div>
+      <button className="floating-add" onClick={() => setShowForm(true)}>+</button>
+
+      {showForm && (
+        <div className="modal-bg">
+          <form className="modal" onSubmit={createJob}>
+            <h2>Add Job</h2>
+
+            <input required placeholder="Job Name" value={form.job_name} onChange={(e) => setForm({ ...form, job_name: e.target.value })} />
+            <input required placeholder="Job Location" value={form.job_location} onChange={(e) => setForm({ ...form, job_location: e.target.value })} />
+            <input required type="date" value={form.scheduled_date} onChange={(e) => setForm({ ...form, scheduled_date: e.target.value })} />
+            <input type="time" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} />
+            <input type="number" placeholder="Estimated Hours" value={form.estimated_hours} onChange={(e) => setForm({ ...form, estimated_hours: e.target.value })} />
+            <input placeholder="Customer Name" value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} />
+            <input placeholder="Customer Phone" value={form.customer_phone} onChange={(e) => setForm({ ...form, customer_phone: e.target.value })} />
+
+            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+              <option value="scheduled">Scheduled</option>
+              <option value="in_progress">In Progress</option>
+              <option value="urgent">Urgent</option>
+              <option value="completed">Completed</option>
+            </select>
+
+            <textarea placeholder="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+
+            <button type="submit">Save Job</button>
+            <button type="button" className="secondary" onClick={() => setShowForm(false)}>Cancel</button>
+          </form>
+        </div>
+      )}
+
+      {selectedJob && (
+        <div className="modal-bg">
+          <div className="modal">
+            <h2>{selectedJob.job_name}</h2>
+            <p><strong>Location:</strong> {selectedJob.job_location}</p>
+            <p><strong>Date:</strong> {selectedJob.scheduled_date}</p>
+            <p><strong>Time:</strong> {selectedJob.start_time || "Not set"}</p>
+            <p><strong>Customer:</strong> {selectedJob.customer_name || "Not set"}</p>
+            <p><strong>Phone:</strong> {selectedJob.customer_phone || "Not set"}</p>
+            <p><strong>Status:</strong> {selectedJob.status}</p>
+            <p>{selectedJob.notes}</p>
+
+            <button onClick={() => setSelectedJob(null)}>Close</button>
+          </div>
+        </div>
+      )}
+
+      <nav>
+        <span>📅</span>
+        <span>📋</span>
+        <span>🔔</span>
+        <span>⚙️</span>
+      </nav>
     </div>
   );
 }
-
-const styles = {
-  app: {
-    background: "#0b0b0b",
-    minHeight: "100vh",
-    color: "white",
-    padding: 16,
-    fontFamily: "Arial"
-  },
-
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 20
-  },
-
-  formCard: {
-    background: "#1a1a1a",
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 20
-  },
-
-  calendarWrapper: {
-    background: "#1a1a1a",
-    borderRadius: 16,
-    padding: 12
-  },
-
-  input: {
-    width: "100%",
-    padding: 14,
-    marginBottom: 12,
-    borderRadius: 10,
-    border: "1px solid #333",
-    background: "#111",
-    color: "white",
-    fontSize: 16
-  },
-
-  primaryButton: {
-    width: "100%",
-    padding: 14,
-    borderRadius: 10,
-    border: "none",
-    background: "#22c55e",
-    color: "white",
-    fontWeight: "bold",
-    fontSize: 16
-  },
-
-  secondaryButton: {
-    width: "100%",
-    padding: 14,
-    borderRadius: 10,
-    border: "none",
-    background: "#333",
-    color: "white",
-    marginTop: 10
-  },
-
-  logoutButton: {
-    padding: "10px 16px",
-    borderRadius: 10,
-    border: "none",
-    background: "#222",
-    color: "white"
-  },
-
-  bottomNav: {
-    position: "fixed",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    background: "#111",
-    borderTop: "1px solid #222",
-    display: "flex",
-    justifyContent: "space-around",
-    padding: 16,
-    fontSize: 24
-  },
-
-  loginPage: {
-    background: "#0b0b0b",
-    minHeight: "100vh",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20
-  },
-
-  loginCard: {
-    background: "#1a1a1a",
-    padding: 24,
-    borderRadius: 16,
-    width: "100%",
-    maxWidth: 400,
-    color: "white"
-  }
-};
