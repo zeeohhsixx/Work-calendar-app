@@ -61,21 +61,9 @@ export default function App() {
 
     const channel = supabase
       .channel("live-jobs")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "jobs" },
-        loadEverything
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "job_files" },
-        loadEverything
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "notifications" },
-        loadEverything
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "jobs" }, loadEverything)
+      .on("postgres_changes", { event: "*", schema: "public", table: "job_files" }, loadEverything)
+      .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, loadEverything)
       .subscribe();
 
     return () => supabase.removeChannel(channel);
@@ -87,6 +75,7 @@ export default function App() {
     await supabase.from("employees").upsert({
       id: user.id,
       full_name: user.email,
+      display_name: user.user_metadata?.display_name || user.email,
       role: "employee"
     });
   }
@@ -117,7 +106,7 @@ export default function App() {
   async function loadEverything() {
     const [jobRes, employeeRes, fileRes, notificationRes] = await Promise.all([
       supabase.from("jobs").select("*").order("scheduled_date", { ascending: true }),
-      supabase.from("employees").select("*").order("full_name"),
+      supabase.from("employees").select("*").order("display_name"),
       supabase.from("job_files").select("*").order("created_at", { ascending: false }),
       supabase.from("notifications").select("*").order("created_at", { ascending: false })
     ]);
@@ -126,6 +115,11 @@ export default function App() {
     if (!employeeRes.error) setEmployees(employeeRes.data || []);
     if (!fileRes.error) setFiles(fileRes.data || []);
     if (!notificationRes.error) setNotifications(notificationRes.data || []);
+  }
+
+  function getEmployeeName(userId) {
+    const employee = employees.find((e) => e.id === userId);
+    return employee?.display_name || employee?.full_name || "Unassigned";
   }
 
   function openCreateForm() {
@@ -301,16 +295,19 @@ export default function App() {
 
   const filteredJobs = useMemo(() => {
     return jobs.filter((job) => {
+      const assignedName = getEmployeeName(job.assigned_to).toLowerCase();
+
       const matchesSearch =
         job.job_name?.toLowerCase().includes(search.toLowerCase()) ||
         job.job_location?.toLowerCase().includes(search.toLowerCase()) ||
-        job.customer_name?.toLowerCase().includes(search.toLowerCase());
+        job.customer_name?.toLowerCase().includes(search.toLowerCase()) ||
+        assignedName.includes(search.toLowerCase());
 
       const matchesStatus = statusFilter === "all" || job.status === statusFilter;
 
       return matchesSearch && matchesStatus;
     });
-  }, [jobs, search, statusFilter]);
+  }, [jobs, search, statusFilter, employees]);
 
   const todayJobs = filteredJobs.filter(
     (job) => job.scheduled_date === new Date().toISOString().split("T")[0]
@@ -320,7 +317,9 @@ export default function App() {
     .filter((job) => job.scheduled_date)
     .map((job) => ({
       id: String(job.id),
-      title: job.job_name,
+      title: job.assigned_to
+        ? `${job.job_name} • ${getEmployeeName(job.assigned_to)}`
+        : job.job_name,
       start: job.start_time
         ? `${job.scheduled_date}T${job.start_time}`
         : job.scheduled_date,
@@ -358,6 +357,7 @@ export default function App() {
           />
 
           <button onClick={login}>Login</button>
+
           <button className="secondary" onClick={signUp}>
             Create Account
           </button>
@@ -384,7 +384,7 @@ export default function App() {
 
       <div className="filters">
         <input
-          placeholder="Search jobs, customers, locations..."
+          placeholder="Search jobs, customers, locations, employees..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -426,6 +426,7 @@ export default function App() {
             <div className="job-card" key={job.id} onClick={() => setSelectedJob(job)}>
               <strong>{job.job_name}</strong>
               <p>{job.job_location}</p>
+              <p>Assigned: {job.assigned_to ? getEmployeeName(job.assigned_to) : "Unassigned"}</p>
               <span>{job.scheduled_date} • {job.status}</span>
             </div>
           ))}
@@ -442,6 +443,7 @@ export default function App() {
             <div className="job-card" key={job.id} onClick={() => setSelectedJob(job)}>
               <strong>{job.job_name}</strong>
               <p>{job.job_location}</p>
+              <p>Assigned: {job.assigned_to ? getEmployeeName(job.assigned_to) : "Unassigned"}</p>
               <span>{job.start_time || "No time set"}</span>
             </div>
           ))}
@@ -521,9 +523,10 @@ export default function App() {
               onChange={(e) => setForm({ ...form, assigned_to: e.target.value })}
             >
               <option value="">Unassigned</option>
+
               {employees.map((employee) => (
                 <option key={employee.id} value={employee.id}>
-                  {employee.full_name}
+                  {employee.display_name || employee.full_name || "Unnamed Employee"}
                 </option>
               ))}
             </select>
@@ -577,6 +580,7 @@ export default function App() {
             <p><strong>Time:</strong> {selectedJob.start_time || "Not set"}</p>
             <p><strong>Customer:</strong> {selectedJob.customer_name || "Not set"}</p>
             <p><strong>Phone:</strong> {selectedJob.customer_phone || "Not set"}</p>
+            <p><strong>Assigned To:</strong> {selectedJob.assigned_to ? getEmployeeName(selectedJob.assigned_to) : "Unassigned"}</p>
             <p><strong>Status:</strong> {selectedJob.status}</p>
             <p><strong>Priority:</strong> {selectedJob.priority}</p>
             <p>{selectedJob.notes}</p>
