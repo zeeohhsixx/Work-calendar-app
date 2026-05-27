@@ -20,7 +20,7 @@ const emptyForm = {
   notes: "",
   status: "scheduled",
   priority: "normal",
-  assigned_to: ""
+  assignedEmployees: []
 };
 
 export default function App() {
@@ -32,6 +32,7 @@ export default function App() {
 
   const [jobs, setJobs] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [assignments, setAssignments] = useState([]);
   const [files, setFiles] = useState([]);
 
   const [showForm, setShowForm] = useState(false);
@@ -65,6 +66,7 @@ export default function App() {
       .on("postgres_changes", { event: "*", schema: "public", table: "jobs" }, loadEverything)
       .on("postgres_changes", { event: "*", schema: "public", table: "job_files" }, loadEverything)
       .on("postgres_changes", { event: "*", schema: "public", table: "employees" }, loadEverything)
+      .on("postgres_changes", { event: "*", schema: "public", table: "job_assignments" }, loadEverything)
       .subscribe();
 
     return () => supabase.removeChannel(channel);
@@ -114,13 +116,16 @@ export default function App() {
   }
 
   async function loadEverything() {
-    const [jobRes, employeeRes, fileRes] = await Promise.all([
+    const [jobRes, employeeRes, fileRes, assignmentRes] = await Promise.all([
       supabase.from("jobs").select("*").order("scheduled_date", { ascending: true }),
       supabase.from("employees").select("*").order("display_name"),
-      supabase.from("job_files").select("*").order("created_at", { ascending: false })
+      supabase.from("job_files").select("*").order("created_at", { ascending: false }),
+      supabase.from("job_assignments").select("*")
     ]);
 
     if (!jobRes.error) setJobs(jobRes.data || []);
+    if (!assignmentRes.error) setAssignments(assignmentRes.data || []);
+    if (!fileRes.error) setFiles(fileRes.data || []);
 
     if (!employeeRes.error) {
       setEmployees(employeeRes.data || []);
@@ -132,8 +137,6 @@ export default function App() {
       setDisplayName(currentEmployee?.display_name || "");
       setEmployeeColor(currentEmployee?.color || "#38bdf8");
     }
-
-    if (!fileRes.error) setFiles(fileRes.data || []);
   }
 
   async function updateProfile() {
@@ -169,6 +172,47 @@ export default function App() {
     return employee?.color || "#38bdf8";
   }
 
+  function getJobAssignments(jobId) {
+    return assignments.filter((a) => Number(a.job_id) === Number(jobId));
+  }
+
+  function getAssignedEmployeesForJob(jobId) {
+    return getJobAssignments(jobId)
+      .map((a) => employees.find((e) => e.id === a.employee_id))
+      .filter(Boolean);
+  }
+
+  function getAssignedNames(jobId) {
+    const assigned = getAssignedEmployeesForJob(jobId);
+
+    if (assigned.length === 0) return "Unassigned";
+
+    return assigned
+      .map((employee) => employee.display_name || employee.full_name)
+      .join(", ");
+  }
+
+  function getPrimaryAssignedColor(jobId) {
+    const assigned = getAssignedEmployeesForJob(jobId);
+
+    if (assigned.length === 0) return "#ffffff";
+
+    return assigned[0].color || "#38bdf8";
+  }
+
+  function toggleAssignedEmployee(employeeId) {
+    setForm((currentForm) => {
+      const alreadyAssigned = currentForm.assignedEmployees.includes(employeeId);
+
+      return {
+        ...currentForm,
+        assignedEmployees: alreadyAssigned
+          ? currentForm.assignedEmployees.filter((id) => id !== employeeId)
+          : [...currentForm.assignedEmployees, employeeId]
+      };
+    });
+  }
+
   function openCreateForm() {
     setEditingJob(null);
     setForm(emptyForm);
@@ -176,6 +220,10 @@ export default function App() {
   }
 
   function openEditForm(job) {
+    const currentAssignments = getJobAssignments(job.id).map(
+      (assignment) => assignment.employee_id
+    );
+
     setEditingJob(job);
     setSelectedJob(null);
 
@@ -190,10 +238,27 @@ export default function App() {
       notes: job.notes || "",
       status: job.status || "scheduled",
       priority: job.priority || "normal",
-      assigned_to: job.assigned_to || ""
+      assignedEmployees: currentAssignments
     });
 
     setShowForm(true);
+  }
+
+  async function saveAssignments(jobId, employeeIds) {
+    await supabase.from("job_assignments").delete().eq("job_id", jobId);
+
+    if (employeeIds.length === 0) return;
+
+    const rows = employeeIds.map((employeeId) => ({
+      job_id: jobId,
+      employee_id: employeeId
+    }));
+
+    const { error } = await supabase.from("job_assignments").insert(rows);
+
+    if (error) {
+      alert(error.message);
+    }
   }
 
   async function saveJob(e) {
@@ -212,19 +277,33 @@ export default function App() {
       notes: form.notes,
       status: form.status,
       priority: form.priority,
-      assigned_to: form.assigned_to || null,
       created_by: userData.user.id,
       updated_at: new Date().toISOString()
     };
 
-    const response = editingJob
-      ? await supabase.from("jobs").update(jobData).eq("id", editingJob.id)
-      : await supabase.from("jobs").insert(jobData).select().single();
+    let response;
+
+    if (editingJob) {
+      response = await supabase
+        .from("jobs")
+        .update(jobData)
+        .eq("id", editingJob.id)
+        .select()
+        .single();
+    } else {
+      response = await supabase
+        .from("jobs")
+        .insert(jobData)
+        .select()
+        .single();
+    }
 
     if (response.error) {
       alert(response.error.message);
       return;
     }
+
+    await saveAssignments(response.data.id, form.assignedEmployees);
 
     setForm(emptyForm);
     setEditingJob(null);
@@ -316,20 +395,20 @@ export default function App() {
 
   const filteredJobs = useMemo(() => {
     return jobs.filter((job) => {
-      const assignedName = getEmployeeName(job.assigned_to).toLowerCase();
+      const assignedNames = getAssignedNames(job.id).toLowerCase();
 
       const matchesSearch =
         job.job_name?.toLowerCase().includes(search.toLowerCase()) ||
         job.job_location?.toLowerCase().includes(search.toLowerCase()) ||
         job.customer_name?.toLowerCase().includes(search.toLowerCase()) ||
-        assignedName.includes(search.toLowerCase());
+        assignedNames.includes(search.toLowerCase());
 
       const matchesStatus =
         statusFilter === "all" || job.status === statusFilter;
 
       return matchesSearch && matchesStatus;
     });
-  }, [jobs, search, statusFilter, employees]);
+  }, [jobs, search, statusFilter, employees, assignments]);
 
   const todayJobs = filteredJobs.filter(
     (job) => job.scheduled_date === new Date().toISOString().split("T")[0]
@@ -345,21 +424,22 @@ export default function App() {
         : job.scheduled_date,
       backgroundColor: "transparent",
       borderColor: "transparent",
-      textColor: job.assigned_to
-        ? getEmployeeColor(job.assigned_to)
-        : "#ffffff",
+      textColor: getPrimaryAssignedColor(job.id),
       extendedProps: job
     }));
 
   function renderEventContent(eventInfo) {
     const job = eventInfo.event.extendedProps;
-    const color = job.assigned_to
-      ? getEmployeeColor(job.assigned_to)
-      : "#ffffff";
+    const assigned = getAssignedEmployeesForJob(job.id);
+    const color = getPrimaryAssignedColor(job.id);
 
     return (
       <div className="calendar-event-row" style={{ color }}>
         <span className="event-name">{eventInfo.event.title}</span>
+
+        {assigned.length > 1 && (
+          <span className="multi-count">+{assigned.length}</span>
+        )}
       </div>
     );
   }
@@ -467,22 +547,13 @@ export default function App() {
               key={job.id}
               onClick={() => setSelectedJob(job)}
             >
-              <strong
-                style={{
-                  color: job.assigned_to
-                    ? getEmployeeColor(job.assigned_to)
-                    : "#ffffff"
-                }}
-              >
+              <strong style={{ color: getPrimaryAssignedColor(job.id) }}>
                 {job.job_name}
               </strong>
+
               <p>{job.job_location}</p>
-              <p>
-                Assigned:{" "}
-                {job.assigned_to
-                  ? getEmployeeName(job.assigned_to)
-                  : "Unassigned"}
-              </p>
+              <p>Assigned: {getAssignedNames(job.id)}</p>
+
               <span>
                 {job.scheduled_date} • {job.status}
               </span>
@@ -503,22 +574,13 @@ export default function App() {
               key={job.id}
               onClick={() => setSelectedJob(job)}
             >
-              <strong
-                style={{
-                  color: job.assigned_to
-                    ? getEmployeeColor(job.assigned_to)
-                    : "#ffffff"
-                }}
-              >
+              <strong style={{ color: getPrimaryAssignedColor(job.id) }}>
                 {job.job_name}
               </strong>
+
               <p>{job.job_location}</p>
-              <p>
-                Assigned:{" "}
-                {job.assigned_to
-                  ? getEmployeeName(job.assigned_to)
-                  : "Unassigned"}
-              </p>
+              <p>Assigned: {getAssignedNames(job.id)}</p>
+
               <span>{job.start_time || "No time set"}</span>
             </div>
           ))}
@@ -626,21 +688,30 @@ export default function App() {
               }
             />
 
-            <select
-              value={form.assigned_to}
-              onChange={(e) =>
-                setForm({ ...form, assigned_to: e.target.value })
-              }
-            >
-              <option value="">Unassigned</option>
+            <div className="assignment-box">
+              <p className="assignment-title">Assign Employees</p>
+
               {employees.map((employee) => (
-                <option key={employee.id} value={employee.id}>
-                  {employee.display_name ||
-                    employee.full_name ||
-                    "Unnamed Employee"}
-                </option>
+                <label className="employee-check" key={employee.id}>
+                  <input
+                    type="checkbox"
+                    checked={form.assignedEmployees.includes(employee.id)}
+                    onChange={() => toggleAssignedEmployee(employee.id)}
+                  />
+
+                  <span
+                    className="employee-color-dot"
+                    style={{ backgroundColor: employee.color || "#38bdf8" }}
+                  />
+
+                  <span>
+                    {employee.display_name ||
+                      employee.full_name ||
+                      "Unnamed Employee"}
+                  </span>
+                </label>
               ))}
-            </select>
+            </div>
 
             <select
               value={form.status}
@@ -686,13 +757,7 @@ export default function App() {
       {selectedJob && (
         <div className="modal-bg">
           <div className="modal">
-            <h2
-              style={{
-                color: selectedJob.assigned_to
-                  ? getEmployeeColor(selectedJob.assigned_to)
-                  : "#ffffff"
-              }}
-            >
+            <h2 style={{ color: getPrimaryAssignedColor(selectedJob.id) }}>
               {selectedJob.job_name}
             </h2>
 
@@ -701,7 +766,7 @@ export default function App() {
             <p><strong>Time:</strong> {selectedJob.start_time || "Not set"}</p>
             <p><strong>Customer:</strong> {selectedJob.customer_name || "Not set"}</p>
             <p><strong>Phone:</strong> {selectedJob.customer_phone || "Not set"}</p>
-            <p><strong>Assigned To:</strong> {selectedJob.assigned_to ? getEmployeeName(selectedJob.assigned_to) : "Unassigned"}</p>
+            <p><strong>Assigned To:</strong> {getAssignedNames(selectedJob.id)}</p>
             <p><strong>Status:</strong> {selectedJob.status}</p>
             <p><strong>Priority:</strong> {selectedJob.priority}</p>
             <p>{selectedJob.notes}</p>
