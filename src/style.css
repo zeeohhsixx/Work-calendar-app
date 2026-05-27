@@ -440,3 +440,43 @@ input[type="color"] {
   max-width: 100% !important;
   overflow: hidden !important;
 }
+.assignment-box {
+  border: 1px solid #1e3a5f;
+  background: #07111f;
+  border-radius: 14px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.assignment-title {
+  margin: 0 0 10px;
+  color: #93c5fd;
+  font-weight: 900;
+}
+
+.employee-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: white;
+  margin-bottom: 10px;
+  font-weight: 700;
+}
+
+.employee-check input {
+  width: auto;
+  margin: 0;
+}
+
+.employee-color-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.multi-count {
+  margin-left: 4px;
+  font-size: 10px;
+  font-weight: 900;
+  opacity: 0.85;
+}
