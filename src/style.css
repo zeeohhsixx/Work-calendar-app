@@ -324,4 +324,31 @@ nav button.nav-active {
     flex-direction: column;
     gap: 10px;
   }
+  .calendar-event-row {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  font-weight: 900;
+  font-size: 12px;
+  line-height: 1.1;
 }
+
+.event-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.color-label {
+  display: block;
+  margin-bottom: 8px;
+  color: #93c5fd;
+  font-weight: 800;
+}
+
+input[type="color"] {
+  height: 54px;
+  padding: 6px;
+  cursor: pointer;
+}
+  
