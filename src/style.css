@@ -401,3 +401,42 @@ input[type="color"] {
 .field-label input {
   margin-top: 6px;
 } 
+.fc-daygrid-event,
+.fc-event,
+.fc-event-main,
+.fc-event-main-frame,
+.fc-event-title-container {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+}
+
+.calendar-event-row {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  display: block !important;
+}
+
+.event-name {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  text-overflow: ellipsis !important;
+}
+
+.fc-daygrid-day-frame {
+  overflow: hidden !important;
+}
+
+.fc-daygrid-day-events {
+  overflow: hidden !important;
+  max-width: 100% !important;
+}
+
+.fc-daygrid-event-harness {
+  max-width: 100% !important;
+  overflow: hidden !important;
+}
