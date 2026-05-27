@@ -351,4 +351,38 @@ input[type="color"] {
   padding: 6px;
   cursor: pointer;
 }
-  
+ .fc-daygrid-event-harness {
+  max-width: 100% !important;
+  overflow: hidden !important;
+}
+
+.fc-daygrid-event {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+}
+
+.fc-event-main {
+  max-width: 100% !important;
+  overflow: hidden !important;
+}
+
+.calendar-event-row {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  display: block;
+}
+
+.event-name {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.fc-daygrid-day-events {
+  max-width: 100%;
+  overflow: hidden;
+}
