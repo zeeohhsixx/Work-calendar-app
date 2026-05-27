@@ -43,6 +43,7 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [displayName, setDisplayName] = useState("");
+  const [employeeColor, setEmployeeColor] = useState("#38bdf8");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -85,26 +86,19 @@ export default function App() {
         id: user.id,
         full_name: user.email,
         display_name: user.email,
+        color: "#38bdf8",
         role: "employee"
       });
     }
   }
 
   async function login() {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
-
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) alert(error.message);
   }
 
   async function signUp() {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password
-    });
-
+    const { error } = await supabase.auth.signUp({ email, password });
     if (error) alert(error.message);
     else alert("Account created.");
   }
@@ -131,13 +125,14 @@ export default function App() {
       );
 
       setDisplayName(currentEmployee?.display_name || "");
+      setEmployeeColor(currentEmployee?.color || "#38bdf8");
     }
 
     if (!fileRes.error) setFiles(fileRes.data || []);
     if (!notificationRes.error) setNotifications(notificationRes.data || []);
   }
 
-  async function updateDisplayName() {
+  async function updateProfile() {
     if (!displayName.trim()) {
       alert("Please enter a display name.");
       return;
@@ -146,7 +141,8 @@ export default function App() {
     const { error } = await supabase
       .from("employees")
       .update({
-        display_name: displayName.trim()
+        display_name: displayName.trim(),
+        color: employeeColor
       })
       .eq("id", session.user.id);
 
@@ -156,12 +152,17 @@ export default function App() {
     }
 
     await loadEverything();
-    alert("Display name updated.");
+    alert("Profile updated.");
   }
 
   function getEmployeeName(userId) {
     const employee = employees.find((e) => e.id === userId);
     return employee?.display_name || employee?.full_name || "Unassigned";
+  }
+
+  function getEmployeeColor(userId) {
+    const employee = employees.find((e) => e.id === userId);
+    return employee?.color || "#38bdf8";
   }
 
   function openCreateForm() {
@@ -215,30 +216,9 @@ export default function App() {
     let response;
 
     if (editingJob) {
-      response = await supabase
-        .from("jobs")
-        .update(jobData)
-        .eq("id", editingJob.id);
-
-      await supabase.from("notifications").insert({
-        job_id: editingJob.id,
-        user_id: form.assigned_to || userData.user.id,
-        message: `${form.job_name} was updated.`
-      });
+      response = await supabase.from("jobs").update(jobData).eq("id", editingJob.id);
     } else {
-      response = await supabase
-        .from("jobs")
-        .insert(jobData)
-        .select()
-        .single();
-
-      if (!response.error) {
-        await supabase.from("notifications").insert({
-          job_id: response.data.id,
-          user_id: form.assigned_to || userData.user.id,
-          message: `${form.job_name} was scheduled for ${form.scheduled_date}.`
-        });
-      }
+      response = await supabase.from("jobs").insert(jobData).select().single();
     }
 
     if (response.error) {
@@ -265,10 +245,7 @@ export default function App() {
   }
 
   async function updateStatus(jobId, status) {
-    const { error } = await supabase
-      .from("jobs")
-      .update({ status })
-      .eq("id", jobId);
+    const { error } = await supabase.from("jobs").update({ status }).eq("id", jobId);
 
     if (error) alert(error.message);
     else {
@@ -294,12 +271,6 @@ export default function App() {
       info.revert();
       return;
     }
-
-    await supabase.from("notifications").insert({
-      job_id: Number(info.event.id),
-      user_id: session.user.id,
-      message: `${info.event.title} was rescheduled to ${newDate}.`
-    });
 
     loadEverything();
   }
@@ -327,14 +298,6 @@ export default function App() {
 
     if (error) alert(error.message);
     else loadEverything();
-  }
-
-  function eventColor(job) {
-    if (job.priority === "urgent") return "#dc2626";
-    if (job.status === "completed") return "#6b7280";
-    if (job.status === "in_progress") return "#2563eb";
-    if (job.status === "rescheduled") return "#7c3aed";
-    return "#0ea5e9";
   }
 
   function appleMaps(address) {
@@ -369,17 +332,26 @@ export default function App() {
     .filter((job) => job.scheduled_date)
     .map((job) => ({
       id: String(job.id),
-      title: job.assigned_to
-        ? `${job.job_name} • ${getEmployeeName(job.assigned_to)}`
-        : job.job_name,
+      title: job.job_name,
       start: job.start_time
         ? `${job.scheduled_date}T${job.start_time}`
         : job.scheduled_date,
-      backgroundColor: eventColor(job),
-      borderColor: eventColor(job),
-      textColor: "#ffffff",
+      backgroundColor: "transparent",
+      borderColor: "transparent",
+      textColor: job.assigned_to ? getEmployeeColor(job.assigned_to) : "#ffffff",
       extendedProps: job
     }));
+
+  function renderEventContent(eventInfo) {
+    const job = eventInfo.event.extendedProps;
+    const color = job.assigned_to ? getEmployeeColor(job.assigned_to) : "#ffffff";
+
+    return (
+      <div className="calendar-event-row" style={{ color }}>
+        <span className="event-name">{eventInfo.event.title}</span>
+      </div>
+    );
+  }
 
   const selectedFiles = selectedJob
     ? files.filter((file) => Number(file.job_id) === Number(selectedJob.id))
@@ -458,6 +430,7 @@ export default function App() {
             editable={true}
             eventDrop={rescheduleJob}
             eventClick={(info) => setSelectedJob(info.event.extendedProps)}
+            eventContent={renderEventContent}
             events={events}
             height="auto"
             dayMaxEvents={4}
@@ -476,7 +449,9 @@ export default function App() {
 
           {filteredJobs.map((job) => (
             <div className="job-card" key={job.id} onClick={() => setSelectedJob(job)}>
-              <strong>{job.job_name}</strong>
+              <strong style={{ color: job.assigned_to ? getEmployeeColor(job.assigned_to) : "#ffffff" }}>
+                {job.job_name}
+              </strong>
               <p>{job.job_location}</p>
               <p>Assigned: {job.assigned_to ? getEmployeeName(job.assigned_to) : "Unassigned"}</p>
               <span>{job.scheduled_date} • {job.status}</span>
@@ -493,23 +468,12 @@ export default function App() {
 
           {todayJobs.map((job) => (
             <div className="job-card" key={job.id} onClick={() => setSelectedJob(job)}>
-              <strong>{job.job_name}</strong>
+              <strong style={{ color: job.assigned_to ? getEmployeeColor(job.assigned_to) : "#ffffff" }}>
+                {job.job_name}
+              </strong>
               <p>{job.job_location}</p>
               <p>Assigned: {job.assigned_to ? getEmployeeName(job.assigned_to) : "Unassigned"}</p>
               <span>{job.start_time || "No time set"}</span>
-            </div>
-          ))}
-        </section>
-      )}
-
-      {activeTab === "notifications" && (
-        <section className="panel">
-          <h2>Notifications</h2>
-
-          {notifications.map((n) => (
-            <div className="job-card" key={n.id}>
-              <strong>{n.message}</strong>
-              <p>{new Date(n.created_at).toLocaleString()}</p>
             </div>
           ))}
         </section>
@@ -519,7 +483,7 @@ export default function App() {
         <section className="panel">
           <h2>Profile</h2>
 
-          <p>Change how your name appears when jobs are assigned.</p>
+          <p>Change your name and calendar color.</p>
 
           <input
             placeholder="Display Name"
@@ -527,9 +491,15 @@ export default function App() {
             onChange={(e) => setDisplayName(e.target.value)}
           />
 
-          <button onClick={updateDisplayName}>
-            Save Display Name
-          </button>
+          <label className="color-label">Your Calendar Color</label>
+
+          <input
+            type="color"
+            value={employeeColor}
+            onChange={(e) => setEmployeeColor(e.target.value)}
+          />
+
+          <button onClick={updateProfile}>Save Profile</button>
         </section>
       )}
 
@@ -542,58 +512,16 @@ export default function App() {
           <form className="modal" onSubmit={saveJob}>
             <h2>{editingJob ? "Edit Job" : "Add Job"}</h2>
 
-            <input
-              required
-              placeholder="Job Name"
-              value={form.job_name}
-              onChange={(e) => setForm({ ...form, job_name: e.target.value })}
-            />
+            <input required placeholder="Job Name" value={form.job_name} onChange={(e) => setForm({ ...form, job_name: e.target.value })} />
+            <input required placeholder="Job Location" value={form.job_location} onChange={(e) => setForm({ ...form, job_location: e.target.value })} />
+            <input required type="date" value={form.scheduled_date} onChange={(e) => setForm({ ...form, scheduled_date: e.target.value })} />
+            <input type="time" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} />
+            <input type="number" placeholder="Estimated Hours" value={form.estimated_hours} onChange={(e) => setForm({ ...form, estimated_hours: e.target.value })} />
+            <input placeholder="Customer Name" value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} />
+            <input placeholder="Customer Phone" value={form.customer_phone} onChange={(e) => setForm({ ...form, customer_phone: e.target.value })} />
 
-            <input
-              required
-              placeholder="Job Location"
-              value={form.job_location}
-              onChange={(e) => setForm({ ...form, job_location: e.target.value })}
-            />
-
-            <input
-              required
-              type="date"
-              value={form.scheduled_date}
-              onChange={(e) => setForm({ ...form, scheduled_date: e.target.value })}
-            />
-
-            <input
-              type="time"
-              value={form.start_time}
-              onChange={(e) => setForm({ ...form, start_time: e.target.value })}
-            />
-
-            <input
-              type="number"
-              placeholder="Estimated Hours"
-              value={form.estimated_hours}
-              onChange={(e) => setForm({ ...form, estimated_hours: e.target.value })}
-            />
-
-            <input
-              placeholder="Customer Name"
-              value={form.customer_name}
-              onChange={(e) => setForm({ ...form, customer_name: e.target.value })}
-            />
-
-            <input
-              placeholder="Customer Phone"
-              value={form.customer_phone}
-              onChange={(e) => setForm({ ...form, customer_phone: e.target.value })}
-            />
-
-            <select
-              value={form.assigned_to}
-              onChange={(e) => setForm({ ...form, assigned_to: e.target.value })}
-            >
+            <select value={form.assigned_to} onChange={(e) => setForm({ ...form, assigned_to: e.target.value })}>
               <option value="">Unassigned</option>
-
               {employees.map((employee) => (
                 <option key={employee.id} value={employee.id}>
                   {employee.display_name || employee.full_name || "Unnamed Employee"}
@@ -601,39 +529,22 @@ export default function App() {
               ))}
             </select>
 
-            <select
-              value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value })}
-            >
+            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
               <option value="scheduled">Scheduled</option>
               <option value="in_progress">In Progress</option>
               <option value="rescheduled">Rescheduled</option>
               <option value="completed">Completed</option>
             </select>
 
-            <select
-              value={form.priority}
-              onChange={(e) => setForm({ ...form, priority: e.target.value })}
-            >
+            <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
               <option value="normal">Normal Priority</option>
               <option value="urgent">Urgent</option>
             </select>
 
-            <textarea
-              placeholder="Notes"
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-            />
+            <textarea placeholder="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
 
-            <button type="submit">
-              {editingJob ? "Update Job" : "Save Job"}
-            </button>
-
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => setShowForm(false)}
-            >
+            <button type="submit">{editingJob ? "Update Job" : "Save Job"}</button>
+            <button type="button" className="secondary" onClick={() => setShowForm(false)}>
               Cancel
             </button>
           </form>
@@ -643,7 +554,9 @@ export default function App() {
       {selectedJob && (
         <div className="modal-bg">
           <div className="modal">
-            <h2>{selectedJob.job_name}</h2>
+            <h2 style={{ color: selectedJob.assigned_to ? getEmployeeColor(selectedJob.assigned_to) : "#ffffff" }}>
+              {selectedJob.job_name}
+            </h2>
 
             <p><strong>Location:</strong> {selectedJob.job_location}</p>
             <p><strong>Date:</strong> {selectedJob.scheduled_date}</p>
@@ -656,21 +569,13 @@ export default function App() {
             <p>{selectedJob.notes}</p>
 
             <div className="map-grid">
-              <a href={appleMaps(selectedJob.job_location)} target="_blank">
-                Apple Maps
-              </a>
-
-              <a href={wazeMaps(selectedJob.job_location)} target="_blank">
-                Waze
-              </a>
+              <a href={appleMaps(selectedJob.job_location)} target="_blank">Apple Maps</a>
+              <a href={wazeMaps(selectedJob.job_location)} target="_blank">Waze</a>
             </div>
 
             <label className="upload-box">
               Upload Picture / Document
-              <input
-                type="file"
-                onChange={(e) => uploadFile(selectedJob.id, e.target.files[0])}
-              />
+              <input type="file" onChange={(e) => uploadFile(selectedJob.id, e.target.files[0])} />
             </label>
 
             <h3>Files</h3>
@@ -681,61 +586,29 @@ export default function App() {
               </a>
             ))}
 
-            <button onClick={() => openEditForm(selectedJob)}>
-              Edit Job
-            </button>
-
-            <button
-              className="secondary"
-              onClick={() => updateStatus(selectedJob.id, "in_progress")}
-            >
-              Mark In Progress
-            </button>
-
-            <button
-              className="secondary"
-              onClick={() => updateStatus(selectedJob.id, "completed")}
-            >
-              Mark Completed
-            </button>
-
-            <button className="danger" onClick={() => deleteJob(selectedJob.id)}>
-              Delete Job
-            </button>
-
-            <button className="secondary" onClick={() => setSelectedJob(null)}>
-              Close
-            </button>
+            <button onClick={() => openEditForm(selectedJob)}>Edit Job</button>
+            <button className="secondary" onClick={() => updateStatus(selectedJob.id, "in_progress")}>Mark In Progress</button>
+            <button className="secondary" onClick={() => updateStatus(selectedJob.id, "completed")}>Mark Completed</button>
+            <button className="danger" onClick={() => deleteJob(selectedJob.id)}>Delete Job</button>
+            <button className="secondary" onClick={() => setSelectedJob(null)}>Close</button>
           </div>
         </div>
       )}
 
       <nav>
-        <button
-          className={activeTab === "calendar" ? "nav-active" : ""}
-          onClick={() => setActiveTab("calendar")}
-        >
+        <button className={activeTab === "calendar" ? "nav-active" : ""} onClick={() => setActiveTab("calendar")}>
           <span>Calendar</span>
         </button>
 
-        <button
-          className={activeTab === "list" ? "nav-active" : ""}
-          onClick={() => setActiveTab("list")}
-        >
+        <button className={activeTab === "list" ? "nav-active" : ""} onClick={() => setActiveTab("list")}>
           <span>Jobs</span>
         </button>
 
-        <button
-          className={activeTab === "today" ? "nav-active" : ""}
-          onClick={() => setActiveTab("today")}
-        >
+        <button className={activeTab === "today" ? "nav-active" : ""} onClick={() => setActiveTab("today")}>
           <span>Today</span>
         </button>
 
-        <button
-          className={activeTab === "profile" ? "nav-active" : ""}
-          onClick={() => setActiveTab("profile")}
-        >
+        <button className={activeTab === "profile" ? "nav-active" : ""} onClick={() => setActiveTab("profile")}>
           <span>Profile</span>
         </button>
       </nav>
