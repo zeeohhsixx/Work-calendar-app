@@ -386,3 +386,18 @@ input[type="color"] {
   max-width: 100%;
   overflow: hidden;
 }
+ .date-time-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.field-label {
+  color: #93c5fd;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.field-label input {
+  margin-top: 6px;
+} 
