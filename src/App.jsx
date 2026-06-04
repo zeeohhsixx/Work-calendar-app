@@ -12,7 +12,9 @@ const supabase = createClient(
 const emptyForm = {
   job_name: "",
   job_location: "",
+  street_address: "",
   scheduled_date: "",
+  end_date: "",
   start_time: "",
   estimated_hours: "",
   customer_name: "",
@@ -26,7 +28,6 @@ const emptyForm = {
 export default function App() {
   const [session, setSession] = useState(null);
   const [activeTab, setActiveTab] = useState("calendar");
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -47,11 +48,7 @@ export default function App() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
-
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
     return () => data.subscription.unsubscribe();
   }, []);
 
@@ -64,8 +61,8 @@ export default function App() {
     const channel = supabase
       .channel("live-jobs")
       .on("postgres_changes", { event: "*", schema: "public", table: "jobs" }, loadEverything)
-      .on("postgres_changes", { event: "*", schema: "public", table: "job_files" }, loadEverything)
       .on("postgres_changes", { event: "*", schema: "public", table: "employees" }, loadEverything)
+      .on("postgres_changes", { event: "*", schema: "public", table: "job_files" }, loadEverything)
       .on("postgres_changes", { event: "*", schema: "public", table: "job_assignments" }, loadEverything)
       .subscribe();
 
@@ -93,22 +90,25 @@ export default function App() {
   }
 
   async function login() {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
-
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) alert(error.message);
   }
 
   async function signUp() {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password
-    });
+    if (!email || !password) {
+      alert("Enter your work email and create a password first.");
+      return;
+    }
+
+    if (password.length < 6) {
+      alert("Password must be at least 6 characters.");
+      return;
+    }
+
+    const { error } = await supabase.auth.signUp({ email, password });
 
     if (error) alert(error.message);
-    else alert("Account created.");
+    else alert("Account created. You can now log in with your email and password.");
   }
 
   async function logout() {
@@ -129,11 +129,7 @@ export default function App() {
 
     if (!employeeRes.error) {
       setEmployees(employeeRes.data || []);
-
-      const currentEmployee = employeeRes.data?.find(
-        (e) => e.id === session.user.id
-      );
-
+      const currentEmployee = employeeRes.data?.find((e) => e.id === session.user.id);
       setDisplayName(currentEmployee?.display_name || "");
       setEmployeeColor(currentEmployee?.color || "#38bdf8");
     }
@@ -147,29 +143,14 @@ export default function App() {
 
     const { error } = await supabase
       .from("employees")
-      .update({
-        display_name: displayName.trim(),
-        color: employeeColor
-      })
+      .update({ display_name: displayName.trim(), color: employeeColor })
       .eq("id", session.user.id);
 
-    if (error) {
-      alert(error.message);
-      return;
+    if (error) alert(error.message);
+    else {
+      await loadEverything();
+      alert("Profile updated.");
     }
-
-    await loadEverything();
-    alert("Profile updated.");
-  }
-
-  function getEmployeeName(userId) {
-    const employee = employees.find((e) => e.id === userId);
-    return employee?.display_name || employee?.full_name || "Unassigned";
-  }
-
-  function getEmployeeColor(userId) {
-    const employee = employees.find((e) => e.id === userId);
-    return employee?.color || "#38bdf8";
   }
 
   function getJobAssignments(jobId) {
@@ -184,31 +165,29 @@ export default function App() {
 
   function getAssignedNames(jobId) {
     const assigned = getAssignedEmployeesForJob(jobId);
-
     if (assigned.length === 0) return "Unassigned";
-
-    return assigned
-      .map((employee) => employee.display_name || employee.full_name)
-      .join(", ");
+    return assigned.map((e) => e.display_name || e.full_name).join(", ");
   }
 
-  function getPrimaryAssignedColor(jobId) {
+  function getJobGradient(jobId) {
     const assigned = getAssignedEmployeesForJob(jobId);
 
-    if (assigned.length === 0) return "#ffffff";
+    if (assigned.length === 0) return "#334155";
+    if (assigned.length === 1) return assigned[0].color || "#38bdf8";
 
-    return assigned[0].color || "#38bdf8";
+    const colors = assigned.map((e) => e.color || "#38bdf8");
+    return `linear-gradient(90deg, ${colors.join(", ")})`;
   }
 
   function toggleAssignedEmployee(employeeId) {
-    setForm((currentForm) => {
-      const alreadyAssigned = currentForm.assignedEmployees.includes(employeeId);
+    setForm((current) => {
+      const exists = current.assignedEmployees.includes(employeeId);
 
       return {
-        ...currentForm,
-        assignedEmployees: alreadyAssigned
-          ? currentForm.assignedEmployees.filter((id) => id !== employeeId)
-          : [...currentForm.assignedEmployees, employeeId]
+        ...current,
+        assignedEmployees: exists
+          ? current.assignedEmployees.filter((id) => id !== employeeId)
+          : [...current.assignedEmployees, employeeId]
       };
     });
   }
@@ -220,9 +199,7 @@ export default function App() {
   }
 
   function openEditForm(job) {
-    const currentAssignments = getJobAssignments(job.id).map(
-      (assignment) => assignment.employee_id
-    );
+    const currentAssignments = getJobAssignments(job.id).map((a) => a.employee_id);
 
     setEditingJob(job);
     setSelectedJob(null);
@@ -230,7 +207,9 @@ export default function App() {
     setForm({
       job_name: job.job_name || "",
       job_location: job.job_location || "",
+      street_address: job.street_address || "",
       scheduled_date: job.scheduled_date || "",
+      end_date: job.end_date || job.scheduled_date || "",
       start_time: job.start_time || "",
       estimated_hours: job.estimated_hours || "",
       customer_name: job.customer_name || "",
@@ -255,21 +234,25 @@ export default function App() {
     }));
 
     const { error } = await supabase.from("job_assignments").insert(rows);
-
-    if (error) {
-      alert(error.message);
-    }
+    if (error) alert(error.message);
   }
 
   async function saveJob(e) {
     e.preventDefault();
+
+    if (!form.street_address.trim()) {
+      alert("Street address is required.");
+      return;
+    }
 
     const { data: userData } = await supabase.auth.getUser();
 
     const jobData = {
       job_name: form.job_name,
       job_location: form.job_location,
+      street_address: form.street_address,
       scheduled_date: form.scheduled_date,
+      end_date: form.end_date || form.scheduled_date,
       start_time: form.start_time || null,
       estimated_hours: Number(form.estimated_hours || 1),
       customer_name: form.customer_name,
@@ -281,22 +264,9 @@ export default function App() {
       updated_at: new Date().toISOString()
     };
 
-    let response;
-
-    if (editingJob) {
-      response = await supabase
-        .from("jobs")
-        .update(jobData)
-        .eq("id", editingJob.id)
-        .select()
-        .single();
-    } else {
-      response = await supabase
-        .from("jobs")
-        .insert(jobData)
-        .select()
-        .single();
-    }
+    const response = editingJob
+      ? await supabase.from("jobs").update(jobData).eq("id", editingJob.id).select().single()
+      : await supabase.from("jobs").insert(jobData).select().single();
 
     if (response.error) {
       alert(response.error.message);
@@ -324,10 +294,7 @@ export default function App() {
   }
 
   async function updateStatus(jobId, status) {
-    const { error } = await supabase
-      .from("jobs")
-      .update({ status })
-      .eq("id", jobId);
+    const { error } = await supabase.from("jobs").update({ status }).eq("id", jobId);
 
     if (error) alert(error.message);
     else {
@@ -343,6 +310,7 @@ export default function App() {
       .from("jobs")
       .update({
         scheduled_date: newDate,
+        end_date: newDate,
         status: "rescheduled",
         updated_at: new Date().toISOString()
       })
@@ -351,10 +319,9 @@ export default function App() {
     if (error) {
       alert(error.message);
       info.revert();
-      return;
+    } else {
+      loadEverything();
     }
-
-    loadEverything();
   }
 
   async function uploadFile(jobId, file) {
@@ -362,9 +329,7 @@ export default function App() {
 
     const path = `${jobId}/${Date.now()}-${file.name}`;
 
-    const upload = await supabase.storage
-      .from("job-files")
-      .upload(path, file);
+    const upload = await supabase.storage.from("job-files").upload(path, file);
 
     if (upload.error) {
       alert(upload.error.message);
@@ -400,46 +365,53 @@ export default function App() {
       const matchesSearch =
         job.job_name?.toLowerCase().includes(search.toLowerCase()) ||
         job.job_location?.toLowerCase().includes(search.toLowerCase()) ||
+        job.street_address?.toLowerCase().includes(search.toLowerCase()) ||
         job.customer_name?.toLowerCase().includes(search.toLowerCase()) ||
         assignedNames.includes(search.toLowerCase());
 
-      const matchesStatus =
-        statusFilter === "all" || job.status === statusFilter;
+      const matchesStatus = statusFilter === "all" || job.status === statusFilter;
 
       return matchesSearch && matchesStatus;
     });
   }, [jobs, search, statusFilter, employees, assignments]);
 
-  const todayJobs = filteredJobs.filter(
-    (job) => job.scheduled_date === new Date().toISOString().split("T")[0]
-  );
+  const todayJobs = filteredJobs.filter((job) => {
+    const today = new Date().toISOString().split("T")[0];
+    const end = job.end_date || job.scheduled_date;
+    return job.scheduled_date <= today && end >= today;
+  });
 
   const events = filteredJobs
     .filter((job) => job.scheduled_date)
-    .map((job) => ({
-      id: String(job.id),
-      title: job.job_name,
-      start: job.start_time
-        ? `${job.scheduled_date}T${job.start_time}`
-        : job.scheduled_date,
-      backgroundColor: "transparent",
-      borderColor: "transparent",
-      textColor: getPrimaryAssignedColor(job.id),
-      extendedProps: job
-    }));
+    .map((job) => {
+      const event = {
+        id: String(job.id),
+        title: job.job_name,
+        start: job.start_time
+          ? `${job.scheduled_date}T${job.start_time}`
+          : job.scheduled_date,
+        backgroundColor: "transparent",
+        borderColor: "transparent",
+        extendedProps: job
+      };
+
+      if (job.end_date) {
+        const exclusiveEnd = new Date(job.end_date);
+        exclusiveEnd.setDate(exclusiveEnd.getDate() + 1);
+        event.end = exclusiveEnd.toISOString().split("T")[0];
+      }
+
+      return event;
+    });
 
   function renderEventContent(eventInfo) {
     const job = eventInfo.event.extendedProps;
-    const assigned = getAssignedEmployeesForJob(job.id);
-    const color = getPrimaryAssignedColor(job.id);
+    const assignedCount = getAssignedEmployeesForJob(job.id).length;
 
     return (
-      <div className="calendar-event-row" style={{ color }}>
-        <span className="event-name">{eventInfo.event.title}</span>
-
-        {assigned.length > 1 && (
-          <span className="multi-count">+{assigned.length}</span>
-        )}
+      <div className="gradient-event" style={{ background: getJobGradient(job.id) }}>
+        <span className="gradient-event-title">{job.job_name}</span>
+        {assignedCount > 1 && <span className="multi-count">+{assignedCount}</span>}
       </div>
     );
   }
@@ -458,24 +430,16 @@ export default function App() {
 
           <h1>Employee Login</h1>
 
-          <input
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
+          <p className="signup-help">
+            New employee? Enter your work email and create a password with at least 6 characters,
+            then tap Create Account. After signing up, use the same email and password to log in.
+          </p>
 
-          <input
-            placeholder="Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
+          <input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <input placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
 
           <button onClick={login}>Login</button>
-
-          <button className="secondary" onClick={signUp}>
-            Create Account
-          </button>
+          <button className="secondary" onClick={signUp}>Create Account</button>
         </div>
       </div>
     );
@@ -492,22 +456,13 @@ export default function App() {
           </div>
         </div>
 
-        <button className="logout" onClick={logout}>
-          Logout
-        </button>
+        <button className="logout" onClick={logout}>Logout</button>
       </header>
 
       <div className="filters">
-        <input
-          placeholder="Search jobs, customers, locations, employees..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+        <input placeholder="Search jobs, customers, addresses, employees..." value={search} onChange={(e) => setSearch(e.target.value)} />
 
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-        >
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="all">All Jobs</option>
           <option value="scheduled">Scheduled</option>
           <option value="in_progress">In Progress</option>
@@ -542,21 +497,11 @@ export default function App() {
           <h2>Job List</h2>
 
           {filteredJobs.map((job) => (
-            <div
-              className="job-card"
-              key={job.id}
-              onClick={() => setSelectedJob(job)}
-            >
-              <strong style={{ color: getPrimaryAssignedColor(job.id) }}>
-                {job.job_name}
-              </strong>
-
-              <p>{job.job_location}</p>
+            <div className="job-card" key={job.id} onClick={() => setSelectedJob(job)}>
+              <strong>{job.job_name}</strong>
+              <p>{job.street_address}</p>
               <p>Assigned: {getAssignedNames(job.id)}</p>
-
-              <span>
-                {job.scheduled_date} • {job.status}
-              </span>
+              <span>{job.scheduled_date} to {job.end_date || job.scheduled_date} • {job.status}</span>
             </div>
           ))}
         </section>
@@ -569,18 +514,10 @@ export default function App() {
           {todayJobs.length === 0 && <p>No jobs scheduled today.</p>}
 
           {todayJobs.map((job) => (
-            <div
-              className="job-card"
-              key={job.id}
-              onClick={() => setSelectedJob(job)}
-            >
-              <strong style={{ color: getPrimaryAssignedColor(job.id) }}>
-                {job.job_name}
-              </strong>
-
-              <p>{job.job_location}</p>
+            <div className="job-card" key={job.id} onClick={() => setSelectedJob(job)}>
+              <strong>{job.job_name}</strong>
+              <p>{job.street_address}</p>
               <p>Assigned: {getAssignedNames(job.id)}</p>
-
               <span>{job.start_time || "No time set"}</span>
             </div>
           ))}
@@ -590,166 +527,77 @@ export default function App() {
       {activeTab === "profile" && (
         <section className="panel">
           <h2>Profile</h2>
-
           <p>Change your name and calendar color.</p>
 
-          <input
-            placeholder="Display Name"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-          />
+          <input placeholder="Display Name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
 
           <label className="color-label">Your Calendar Color</label>
-
-          <input
-            type="color"
-            value={employeeColor}
-            onChange={(e) => setEmployeeColor(e.target.value)}
-          />
+          <input type="color" value={employeeColor} onChange={(e) => setEmployeeColor(e.target.value)} />
 
           <button onClick={updateProfile}>Save Profile</button>
         </section>
       )}
 
-      <button className="floating-add" onClick={openCreateForm}>
-        +
-      </button>
+      <button className="floating-add" onClick={openCreateForm}>+</button>
 
       {showForm && (
         <div className="modal-bg">
           <form className="modal" onSubmit={saveJob}>
             <h2>{editingJob ? "Edit Job" : "Add Job"}</h2>
 
-            <input
-              required
-              placeholder="Job Name"
-              value={form.job_name}
-              onChange={(e) =>
-                setForm({ ...form, job_name: e.target.value })
-              }
-            />
-
-            <input
-              required
-              placeholder="Job Location"
-              value={form.job_location}
-              onChange={(e) =>
-                setForm({ ...form, job_location: e.target.value })
-              }
-            />
+            <input required placeholder="Job Name" value={form.job_name} onChange={(e) => setForm({ ...form, job_name: e.target.value })} />
+            <input required placeholder="Job Location / Area" value={form.job_location} onChange={(e) => setForm({ ...form, job_location: e.target.value })} />
+            <input required placeholder="Street Address Required" value={form.street_address} onChange={(e) => setForm({ ...form, street_address: e.target.value })} />
 
             <div className="date-time-row">
               <label className="field-label">
-                Job Date
-                <input
-                  required
-                  type="date"
-                  value={form.scheduled_date}
-                  onChange={(e) =>
-                    setForm({ ...form, scheduled_date: e.target.value })
-                  }
-                />
+                Start Date
+                <input required type="date" value={form.scheduled_date} onChange={(e) => setForm({ ...form, scheduled_date: e.target.value })} />
               </label>
 
               <label className="field-label">
-                Start Time
-                <input
-                  type="time"
-                  value={form.start_time}
-                  onChange={(e) =>
-                    setForm({ ...form, start_time: e.target.value })
-                  }
-                />
+                End Date
+                <input type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} />
               </label>
             </div>
 
-            <input
-              type="number"
-              placeholder="Estimated Hours"
-              value={form.estimated_hours}
-              onChange={(e) =>
-                setForm({ ...form, estimated_hours: e.target.value })
-              }
-            />
+            <label className="field-label">
+              Start Time
+              <input type="time" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} />
+            </label>
 
-            <input
-              placeholder="Customer Name"
-              value={form.customer_name}
-              onChange={(e) =>
-                setForm({ ...form, customer_name: e.target.value })
-              }
-            />
-
-            <input
-              placeholder="Customer Phone"
-              value={form.customer_phone}
-              onChange={(e) =>
-                setForm({ ...form, customer_phone: e.target.value })
-              }
-            />
+            <input type="number" placeholder="Estimated Hours" value={form.estimated_hours} onChange={(e) => setForm({ ...form, estimated_hours: e.target.value })} />
+            <input placeholder="Customer Name" value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} />
+            <input placeholder="Customer Phone" value={form.customer_phone} onChange={(e) => setForm({ ...form, customer_phone: e.target.value })} />
 
             <div className="assignment-box">
               <p className="assignment-title">Assign Employees</p>
 
               {employees.map((employee) => (
                 <label className="employee-check" key={employee.id}>
-                  <input
-                    type="checkbox"
-                    checked={form.assignedEmployees.includes(employee.id)}
-                    onChange={() => toggleAssignedEmployee(employee.id)}
-                  />
-
-                  <span
-                    className="employee-color-dot"
-                    style={{ backgroundColor: employee.color || "#38bdf8" }}
-                  />
-
-                  <span>
-                    {employee.display_name ||
-                      employee.full_name ||
-                      "Unnamed Employee"}
-                  </span>
+                  <input type="checkbox" checked={form.assignedEmployees.includes(employee.id)} onChange={() => toggleAssignedEmployee(employee.id)} />
+                  <span className="employee-color-dot" style={{ backgroundColor: employee.color || "#38bdf8" }} />
+                  <span>{employee.display_name || employee.full_name || "Unnamed Employee"}</span>
                 </label>
               ))}
             </div>
 
-            <select
-              value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value })}
-            >
+            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
               <option value="scheduled">Scheduled</option>
               <option value="in_progress">In Progress</option>
               <option value="rescheduled">Rescheduled</option>
               <option value="completed">Completed</option>
             </select>
 
-            <select
-              value={form.priority}
-              onChange={(e) =>
-                setForm({ ...form, priority: e.target.value })
-              }
-            >
+            <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
               <option value="normal">Normal Priority</option>
               <option value="urgent">Urgent</option>
             </select>
 
-            <textarea
-              placeholder="Notes"
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-            />
+            <textarea placeholder="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
 
-            <button type="submit">
-              {editingJob ? "Update Job" : "Save Job"}
-            </button>
-
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => setShowForm(false)}
-            >
-              Cancel
-            </button>
+            <button type="submit">{editingJob ? "Update Job" : "Save Job"}</button>
+            <button type="button" className="secondary" onClick={() => setShowForm(false)}>Cancel</button>
           </form>
         </div>
       )}
@@ -757,12 +605,11 @@ export default function App() {
       {selectedJob && (
         <div className="modal-bg">
           <div className="modal">
-            <h2 style={{ color: getPrimaryAssignedColor(selectedJob.id) }}>
-              {selectedJob.job_name}
-            </h2>
+            <h2>{selectedJob.job_name}</h2>
 
+            <p><strong>Address:</strong> {selectedJob.street_address}</p>
             <p><strong>Location:</strong> {selectedJob.job_location}</p>
-            <p><strong>Date:</strong> {selectedJob.scheduled_date}</p>
+            <p><strong>Date Range:</strong> {selectedJob.scheduled_date} to {selectedJob.end_date || selectedJob.scheduled_date}</p>
             <p><strong>Time:</strong> {selectedJob.start_time || "Not set"}</p>
             <p><strong>Customer:</strong> {selectedJob.customer_name || "Not set"}</p>
             <p><strong>Phone:</strong> {selectedJob.customer_phone || "Not set"}</p>
@@ -772,96 +619,37 @@ export default function App() {
             <p>{selectedJob.notes}</p>
 
             <div className="map-grid">
-              <a href={appleMaps(selectedJob.job_location)} target="_blank">
-                Apple Maps
-              </a>
-
-              <a href={wazeMaps(selectedJob.job_location)} target="_blank">
-                Waze
-              </a>
+              <a href={appleMaps(selectedJob.street_address)} target="_blank">Apple Maps</a>
+              <a href={wazeMaps(selectedJob.street_address)} target="_blank">Waze</a>
             </div>
 
             <label className="upload-box">
               Upload Picture / Document
-              <input
-                type="file"
-                onChange={(e) =>
-                  uploadFile(selectedJob.id, e.target.files[0])
-                }
-              />
+              <input type="file" onChange={(e) => uploadFile(selectedJob.id, e.target.files[0])} />
             </label>
 
             <h3>Files</h3>
 
             {selectedFiles.map((file) => (
-              <a
-                className="file-link"
-                key={file.id}
-                href={file.file_url}
-                target="_blank"
-              >
+              <a className="file-link" key={file.id} href={file.file_url} target="_blank">
                 {file.file_name}
               </a>
             ))}
 
             <button onClick={() => openEditForm(selectedJob)}>Edit Job</button>
-
-            <button
-              className="secondary"
-              onClick={() => updateStatus(selectedJob.id, "in_progress")}
-            >
-              Mark In Progress
-            </button>
-
-            <button
-              className="secondary"
-              onClick={() => updateStatus(selectedJob.id, "completed")}
-            >
-              Mark Completed
-            </button>
-
-            <button
-              className="danger"
-              onClick={() => deleteJob(selectedJob.id)}
-            >
-              Delete Job
-            </button>
-
-            <button className="secondary" onClick={() => setSelectedJob(null)}>
-              Close
-            </button>
+            <button className="secondary" onClick={() => updateStatus(selectedJob.id, "in_progress")}>Mark In Progress</button>
+            <button className="secondary" onClick={() => updateStatus(selectedJob.id, "completed")}>Mark Completed</button>
+            <button className="danger" onClick={() => deleteJob(selectedJob.id)}>Delete Job</button>
+            <button className="secondary" onClick={() => setSelectedJob(null)}>Close</button>
           </div>
         </div>
       )}
 
       <nav>
-        <button
-          className={activeTab === "calendar" ? "nav-active" : ""}
-          onClick={() => setActiveTab("calendar")}
-        >
-          <span>Calendar</span>
-        </button>
-
-        <button
-          className={activeTab === "list" ? "nav-active" : ""}
-          onClick={() => setActiveTab("list")}
-        >
-          <span>Jobs</span>
-        </button>
-
-        <button
-          className={activeTab === "today" ? "nav-active" : ""}
-          onClick={() => setActiveTab("today")}
-        >
-          <span>Today</span>
-        </button>
-
-        <button
-          className={activeTab === "profile" ? "nav-active" : ""}
-          onClick={() => setActiveTab("profile")}
-        >
-          <span>Profile</span>
-        </button>
+        <button className={activeTab === "calendar" ? "nav-active" : ""} onClick={() => setActiveTab("calendar")}><span>Calendar</span></button>
+        <button className={activeTab === "list" ? "nav-active" : ""} onClick={() => setActiveTab("list")}><span>Jobs</span></button>
+        <button className={activeTab === "today" ? "nav-active" : ""} onClick={() => setActiveTab("today")}><span>Today</span></button>
+        <button className={activeTab === "profile" ? "nav-active" : ""} onClick={() => setActiveTab("profile")}><span>Profile</span></button>
       </nav>
     </div>
   );
