@@ -533,3 +533,78 @@ input[type="color"] {
   border-radius: 999px;
   padding: 1px 5px;
 }
+/* Fix calendar entries overflowing in landscape */
+.fc-daygrid-day-frame {
+  overflow: hidden !important;
+}
+
+.fc-daygrid-day-events {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  padding: 0 3px !important;
+}
+
+.fc-daygrid-event-harness {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+}
+
+.fc-daygrid-event,
+.fc-event,
+.fc-event-main,
+.fc-event-main-frame {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+.gradient-event {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  box-sizing: border-box !important;
+  padding: 2px 4px !important;
+}
+
+.gradient-event-title {
+  display: block !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  text-overflow: ellipsis !important;
+}
+
+@media screen and (orientation: landscape) {
+  .calendar-card {
+    padding: 8px !important;
+  }
+
+  .fc .fc-toolbar {
+    margin-bottom: 8px !important;
+  }
+
+  .fc .fc-toolbar-title {
+    font-size: 20px !important;
+  }
+
+  .fc-daygrid-day-frame {
+    min-height: 72px !important;
+  }
+
+  .gradient-event {
+    font-size: 9px !important;
+    line-height: 1 !important;
+    border-radius: 5px !important;
+  }
+
+  .multi-count {
+    display: none !important;
+  }
+}
