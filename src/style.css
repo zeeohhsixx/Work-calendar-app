@@ -608,3 +608,32 @@ input[type="color"] {
     display: none !important;
   }
 }
+.fc,
+.fc-view-harness,
+.fc-scrollgrid,
+.fc-daygrid-body,
+.fc-daygrid-body table {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.fc-daygrid-event-harness,
+.fc-daygrid-event,
+.fc-event,
+.fc-event-main,
+.gradient-event {
+  max-width: 100% !important;
+  overflow: hidden !important;
+}
+
+.gradient-event {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.gradient-event-title {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  text-overflow: ellipsis !important;
+}
