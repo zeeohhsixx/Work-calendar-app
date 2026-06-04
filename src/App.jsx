@@ -4,6 +4,8 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 
+const GEOAPIFY_KEY = import.meta.env.VITE_GEOAPIFY_KEY;
+
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
   import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -45,7 +47,9 @@ export default function App() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [displayName, setDisplayName] = useState("");
   const [employeeColor, setEmployeeColor] = useState("#38bdf8");
-
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const [addressLoading, setAddressLoading] = useState(false);
+  
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
     const { data } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
@@ -88,6 +92,43 @@ export default function App() {
       });
     }
   }
+ async function searchAddress(value) {
+  setForm({ ...form, street_address: value });
+
+  if (!value || value.length < 3 || !GEOAPIFY_KEY) {
+    setAddressSuggestions([]);
+    return;
+  }
+
+  setAddressLoading(true);
+
+  const url = `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(
+    value
+  )}&limit=5&filter=countrycode:us&apiKey=${GEOAPIFY_KEY}`;
+
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+
+    setAddressSuggestions(data.features || []);
+  } catch {
+    setAddressSuggestions([]);
+  }
+
+  setAddressLoading(false);
+}
+
+function selectAddressSuggestion(item) {
+  const props = item.properties;
+
+  setForm({
+    ...form,
+    street_address: props.formatted || "",
+    job_location: props.city || props.county || props.state || form.job_location
+  });
+
+  setAddressSuggestions([]);
+} 
 
   async function login() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -572,8 +613,32 @@ function duplicateJob(job) {
 
             <input required placeholder="Job Name" value={form.job_name} onChange={(e) => setForm({ ...form, job_name: e.target.value })} />
             <input required placeholder="Job Location / Area" value={form.job_location} onChange={(e) => setForm({ ...form, job_location: e.target.value })} />
-            <input required placeholder="Street Address Required" value={form.street_address} onChange={(e) => setForm({ ...form, street_address: e.target.value })} />
+            <div className="address-search-box">
+  <input
+    required
+    placeholder="Search business or street address"
+    value={form.street_address}
+    onChange={(e) => searchAddress(e.target.value)}
+  />
 
+  {addressLoading && <div className="address-loading">Searching...</div>}
+
+  {addressSuggestions.length > 0 && (
+    <div className="address-suggestions">
+      {addressSuggestions.map((item) => (
+        <button
+          type="button"
+          className="address-suggestion"
+          key={item.properties.place_id}
+          onClick={() => selectAddressSuggestion(item)}
+        >
+          <strong>{item.properties.name || item.properties.address_line1}</strong>
+          <span>{item.properties.formatted}</span>
+        </button>
+      ))}
+    </div>
+  )}
+</div>
             <div className="date-time-row">
               <label className="field-label">
                 Start Date
