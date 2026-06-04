@@ -608,3 +608,43 @@ input[type="color"] {
     display: none !important;
   }
 }
+.address-search-box {
+  position: relative;
+}
+
+.address-loading {
+  color: #93c5fd;
+  font-size: 13px;
+  margin: -6px 0 10px;
+}
+
+.address-suggestions {
+  background: #07111f;
+  border: 1px solid #1e3a5f;
+  border-radius: 14px;
+  padding: 8px;
+  margin: -6px 0 12px;
+  box-shadow: 0 10px 25px rgba(0,0,0,.35);
+}
+
+.address-suggestion {
+  background: transparent;
+  border: 1px solid rgba(56, 189, 248, 0.18);
+  color: white;
+  text-align: left;
+  margin-bottom: 8px;
+  padding: 10px;
+  border-radius: 12px;
+}
+
+.address-suggestion strong {
+  display: block;
+  font-size: 14px;
+}
+
+.address-suggestion span {
+  display: block;
+  color: #93c5fd;
+  font-size: 12px;
+  margin-top: 3px;
+}
