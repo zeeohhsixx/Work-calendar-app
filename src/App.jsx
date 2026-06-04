@@ -661,9 +661,30 @@ function duplicateJob(job) {
               </a>
             ))}
 
-            <button onClick={() => openEditForm(selectedJob)}>Edit Job</button>
-            <button className="secondary" onClick={() => updateStatus(selectedJob.id, "in_progress")}>Mark In Progress</button>
-            <button className="secondary" onClick={() => updateStatus(selectedJob.id, "completed")}>Mark Completed</button>
+          <button onClick={() => openEditForm(selectedJob)}>
+  Edit Job
+</button>
+
+<button
+  className="secondary"
+  onClick={() => duplicateJob(selectedJob)}
+>
+  Duplicate Job
+</button>
+
+<button
+  className="secondary"
+  onClick={() => updateStatus(selectedJob.id, "in_progress")}
+>
+  Mark In Progress
+</button>
+
+<button
+  className="secondary"
+  onClick={() => updateStatus(selectedJob.id, "completed")}
+>
+  Mark Completed
+</button>
             <button className="danger" onClick={() => deleteJob(selectedJob.id)}>Delete Job</button>
             <button className="secondary" onClick={() => setSelectedJob(null)}>Close</button>
           </div>
