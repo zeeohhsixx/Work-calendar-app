@@ -479,4 +479,57 @@ input[type="color"] {
   font-size: 10px;
   font-weight: 900;
   opacity: 0.85;
+}.signup-help {
+  color: #93c5fd;
+  font-size: 14px;
+  line-height: 1.45;
+  margin: 0 0 16px;
+}
+
+.gradient-event {
+  width: 100%;
+  max-width: 100%;
+  padding: 2px 6px;
+  border-radius: 7px;
+  color: white;
+  font-weight: 900;
+  font-size: 11px;
+  line-height: 1.15;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.gradient-event-title {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.fc-daygrid-event,
+.fc-event,
+.fc-event-main,
+.fc-event-main-frame,
+.fc-event-title-container,
+.fc-daygrid-event-harness {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+}
+
+.fc-daygrid-day-frame,
+.fc-daygrid-day-events {
+  overflow: hidden !important;
+  max-width: 100% !important;
+}
+
+.multi-count {
+  flex: 0 0 auto;
+  font-size: 9px;
+  background: rgba(0, 0, 0, 0.35);
+  color: white;
+  border-radius: 999px;
+  padding: 1px 5px;
 }
