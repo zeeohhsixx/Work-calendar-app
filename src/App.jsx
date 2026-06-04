@@ -197,7 +197,32 @@ export default function App() {
     setForm(emptyForm);
     setShowForm(true);
   }
+function duplicateJob(job) {
+  setSelectedJob(null);
+  setEditingJob(null);
 
+  const currentAssignments = getJobAssignments(job.id).map(
+    (a) => a.employee_id
+  );
+
+  setForm({
+    job_name: job.job_name || "",
+    job_location: job.job_location || "",
+    street_address: job.street_address || "",
+    scheduled_date: "",
+    end_date: "",
+    start_time: job.start_time || "",
+    estimated_hours: job.estimated_hours || "",
+    customer_name: job.customer_name || "",
+    customer_phone: job.customer_phone || "",
+    notes: job.notes || "",
+    status: "scheduled",
+    priority: job.priority || "normal",
+    assignedEmployees: currentAssignments
+  });
+
+  setShowForm(true);
+}
   function openEditForm(job) {
     const currentAssignments = getJobAssignments(job.id).map((a) => a.employee_id);
 
