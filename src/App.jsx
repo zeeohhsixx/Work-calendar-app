@@ -45,7 +45,6 @@ export default function App() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [displayName, setDisplayName] = useState("");
   const [employeeColor, setEmployeeColor] = useState("#38bdf8");
-  const [calendarKey, setCalendarKey] = useState(0);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -59,19 +58,6 @@ export default function App() {
     setupEmployee();
     loadEverything();
 
-    useEffect(() => {
-  function forceCalendarResize() {
-    setCalendarKey((key) => key + 1);
-  }
-
-  window.addEventListener("resize", forceCalendarResize);
-  window.addEventListener("orientationchange", forceCalendarResize);
-
-  return () => {
-    window.removeEventListener("resize", forceCalendarResize);
-    window.removeEventListener("orientationchange", forceCalendarResize);
-  };
-}, []);
     const channel = supabase
       .channel("live-jobs")
       .on("postgres_changes", { event: "*", schema: "public", table: "jobs" }, loadEverything)
@@ -513,7 +499,6 @@ function duplicateJob(job) {
       {activeTab === "calendar" && (
         <section className="calendar-card">
           <FullCalendar
-            key={calendarKey}
             plugins={[dayGridPlugin, interactionPlugin]}
             initialView="dayGridMonth"
             editable={true}
